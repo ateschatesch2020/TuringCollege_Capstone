@@ -1,0 +1,23 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# ChromaDB
+chroma_db/
+
+# IDE
+.vscode/
+.idea/

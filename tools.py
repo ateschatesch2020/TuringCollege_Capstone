@@ -1,8 +1,11 @@
+import logging
 from langchain_core.tools import tool
 import os
 from dotenv import load_dotenv
 load_dotenv()
 import serpapi
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_flights(raw):
@@ -114,7 +117,11 @@ def search_weather(city: str, date: str) -> dict:
         "days": 1,
     }
     raw = requests.get(url, params=params).json()
-    day = raw["forecast"]["forecastday"][0]["day"]
+    forecastdays = raw.get("forecast", {}).get("forecastday", [])
+    if not forecastdays:
+        logger.warning("search_weather: no forecast data for %s on %s", city, date)
+        return {}
+    day = forecastdays[0]["day"]
     return {
         "city": raw["location"]["name"],
         "date": date,
@@ -128,5 +135,100 @@ def search_weather(city: str, date: str) -> dict:
     }
 
 
+@tool
+def optimize_itinerary(
+    candidate_cities: str,
+    city_iata_pairs: str,
+    origin_city: str,
+    origin_iata: str,
+    num_to_visit: int,
+    start_date: str,
+    end_date: str,
+    min_nights: int = 2,
+    max_nights: int = 5,
+    min_temp_c: float = -999.0,
+    max_rain_pct: float = 100.0,
+) -> str:
+    """Find the cheapest multi-city vacation itinerary using CP-SAT optimization.
+    Use this when the user wants to plan a multi-city trip, find the cheapest route
+    between several cities, or optimize a vacation itinerary within a date window.
+    candidate_cities: comma-separated city names to consider, e.g. 'Madrid,Lisbon,Barcelona,Rome'
+    city_iata_pairs: comma-separated City:IATA pairs, e.g. 'Madrid:MAD,Lisbon:LIS,Barcelona:BCN,Rome:FCO'
+    origin_city: home city name, e.g. 'Munich'
+    origin_iata: home city IATA airport code, e.g. 'MUC'
+    num_to_visit: how many cities to select and visit from the candidates
+    start_date: earliest departure date in YYYY-MM-DD format
+    end_date: latest return date in YYYY-MM-DD format
+    min_nights: minimum nights per city (default 2)
+    max_nights: maximum nights per city (default 5)
+    min_temp_c: minimum acceptable average temperature in Celsius (default: no constraint)
+    max_rain_pct: maximum acceptable rain chance in % 0-100 (default: no constraint)
+    Returns the optimal city order, per-leg flight details, and total cost.
+    """
+    from datetime import date as _date, timedelta
+    from itinerary_optimizer import (
+        optimize_itinerary as _optimize,
+        WeatherConstraints,
+    )
+
+    try:
+        cities = [c.strip() for c in candidate_cities.split(",")]
+        iata = dict(p.strip().split(":") for p in city_iata_pairs.split(","))
+        start_date_obj = _date.fromisoformat(start_date)
+        end_date_obj   = _date.fromisoformat(end_date)
+    except Exception as e:
+        logger.error("optimize_itinerary: parameter parsing failed — %s", e, exc_info=True)
+        return (
+            f"Parameter error: {e}. "
+            "Expected format — cities: 'City1,City2', "
+            "iata: 'City1:IATA1,City2:IATA2', dates: YYYY-MM-DD."
+        )
+
+    result, stats = _optimize(
+        candidate_cities=cities,
+        city_iata=iata,
+        origin_city=origin_city,
+        origin_iata=origin_iata,
+        num_to_visit=num_to_visit,
+        start_date=start_date_obj,
+        end_date=end_date_obj,
+        min_nights=min_nights,
+        max_nights=max_nights,
+        weather_constraints=WeatherConstraints(
+            min_temp_c=min_temp_c,
+            max_rain_pct=max_rain_pct,
+        ),
+    )
+
+    summary = (
+        f"Search summary: {stats['routes_searched']} flight routes queried, "
+        f"{stats['routes_with_flights']} returned results "
+        f"({stats['total_flight_options']} options total) | "
+        f"{stats['weather_records']} weather records fetched."
+    )
+
+    if result is None:
+        return f"{summary}\nNo feasible itinerary found within the given constraints."
+
+    base = _date.fromisoformat(start_date)
+    lines = [
+        summary,
+        "",
+        f"Optimal route: {' -> '.join([origin_city] + result.city_order + [origin_city])}",
+        f"Total flight cost: ${result.total_cost_usd:.2f}",
+        "",
+    ]
+    for i, leg in enumerate(result.legs):
+        dep = (base + timedelta(days=leg.date_offset)).strftime("%Y-%m-%d")
+        fl = leg.flight
+        dest = result.city_order[i] if i < len(result.city_order) else origin_city
+        nights_str = f" — stay {result.nights_per_city[i]} nights" if i < len(result.nights_per_city) else ""
+        lines.append(
+            f"  {dep}  -> {dest}  {fl.get('airline', '')} {fl.get('flight_number', '')}  "
+            f"${fl.get('price_usd', 0):.2f}{nights_str}"
+        )
+    return "\n".join(lines)
+
+
 class Tools:
-    tools = [search_flights, search_hotels, search_weather]
+    tools = [search_flights, search_hotels, search_weather, optimize_itinerary]

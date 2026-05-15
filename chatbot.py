@@ -1,3 +1,4 @@
+import logging
 import os
 import numpy as np
 import json
@@ -5,6 +6,9 @@ import uuid
 import sqlite3
 import faiss
 import tools
+from datetime import date
+
+logger = logging.getLogger(__name__)
 from langchain_core.messages import HumanMessage, AIMessageChunk
 from langgraph.checkpoint.memory import MemorySaver
 from langchain.agents import create_agent
@@ -176,7 +180,7 @@ class ChatbotManager:
             conn.close()
             return session_id
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger.error("create_session failed for user %s", user_id, exc_info=True)
             return "Sorry, I encountered an error while processing your request."
 
     def delete_session(self, session_id: str) -> str:
@@ -192,7 +196,7 @@ class ChatbotManager:
             return session_id
         except Exception as e:
             conn.rollback()
-            print(f"An error occurred: {e}")
+            logger.error("delete_session failed for %s", session_id, exc_info=True)
             raise
         finally:
             conn.close()
@@ -228,28 +232,34 @@ class ChatbotManager:
 
     def chat(self, session_id: str, query: str):
         """ end point method for chatting """
+        response = "Sorry, I encountered an error while processing your request."
         try:
             docs = self.retriever.invoke(query)
             context = self._format_docs(docs)
-            message = f"Context:\n{context}\n\nQuestion: {query}" if context else query
+            today = date.today().strftime("%Y-%m-%d")
+            message = (f"Today's date: {today}.\n\nContext:\n{context}\n\nQuestion: {query}"
+                       if context else f"Today's date: {today}.\n\nQuestion: {query}")
             result = self.myagent.invoke(
                 {"messages": [HumanMessage(content=message)]},
                 config={"configurable": {"thread_id": session_id}}
             )
             response = result["messages"][-1].content
+        except Exception as e:
+            logger.error("chat failed for session %s", session_id, exc_info=True)
+        finally:
             history = self._get_session_history(session_id)
             history.add_user_message(query)
             history.add_ai_message(response)
-            return response
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return "Sorry, I encountered an error while processing your request."
+        return response
 
     def chat_stream(self, session_id: str, query: str):
+        full_response = "Sorry, I encountered an error while processing your request."
         try:
             docs = self.retriever.invoke(query)
             context = self._format_docs(docs)
-            message = f"Context:\n{context}\n\nQuestion: {query}" if context else query
+            today = date.today().strftime("%Y-%m-%d")
+            message = (f"Today's date: {today}.\n\nContext:\n{context}\n\nQuestion: {query}"
+                       if context else f"Today's date: {today}.\n\nQuestion: {query}")
             full_response = ""
             for msg_chunk, metadata in self.myagent.stream(
                 {"messages": [HumanMessage(content=message)]},
@@ -259,12 +269,14 @@ class ChatbotManager:
                 if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
                     full_response += msg_chunk.content
                     yield msg_chunk.content
+        except Exception as e:
+            logger.error("chat_stream failed for session %s", session_id, exc_info=True)
+            full_response = "Sorry, I encountered an error while processing your request."
+            yield full_response
+        finally:
             history = self._get_session_history(session_id)
             history.add_user_message(query)
             history.add_ai_message(full_response)
-        except Exception as e:
-            print(f"Error occurred: {e}")
-            yield "Sorry, I encountered an error while processing your request."
 
     def embed(self, text):
         response = self.embedding_model.embed_query(text)
@@ -285,7 +297,7 @@ class ChatbotManager:
                 config=config)
             return response
         except Exception as e:
-            print(f"Error occurred: {e}")
+            logger.error("chat_by_vector failed for session %s", session_id, exc_info=True)
             return "Sorry, I encountered an error while processing your request."
 
     def chat_by_vector_stream(self, session_id: str, query: str):
@@ -296,7 +308,7 @@ class ChatbotManager:
             for doc in docs:
                 yield doc.page_content
         except Exception as e:
-            print(f"Error occurred: {e}")
+            logger.error("chat_by_vector_stream failed for session %s", session_id, exc_info=True)
             yield "Sorry, I encountered an error while processing your request."
 
     def invoke_with_user(self, user_id: str, question: str):

@@ -8,13 +8,14 @@ from langchain_core.output_parsers import StrOutputParser
 import os
 load_dotenv()
 
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 embedding_model = OpenAIEmbeddings(
     model="openai/text-embedding-3-small",
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPENROUTER_API_KEY"))
 
-persist_directory = "./chroma_db"
+persist_directory = os.path.join(_ROOT, "chroma_db")
 
 vectorstore = Chroma(
     persist_directory=persist_directory,

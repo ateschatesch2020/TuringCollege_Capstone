@@ -38,12 +38,19 @@ def _extract_flights(raw):
     return all_flights
 
 
+def _get_image_url(images):
+    if not images:
+        return None
+    url = images[0].get("thumbnail") or images[0].get("original_image")
+    return url if url and url.startswith("https://") else None
+
+
 def _extract_hotels(raw):
     hotels = []
     for prop in raw.get("properties", []):
         rate = prop.get("rate_per_night", {})
         images = prop.get("images", [])
-        hotels.append({
+        hotel = {
             "name": prop.get("name"),
             "type": prop.get("type"),
             "location": prop.get("neighborhood") or prop.get("address"),
@@ -53,8 +60,11 @@ def _extract_hotels(raw):
             "check_out_time": prop.get("check_out_time"),
             "amenities": prop.get("amenities", []),
             "nearby_places": [p.get("name") for p in prop.get("nearby_places", [])],
-            "image": images[0].get("thumbnail") if images else None,
-        })
+        }
+        image_url = _get_image_url(images)
+        if image_url:
+            hotel["image"] = image_url
+        hotels.append(hotel)
     return hotels
 
 
@@ -144,6 +154,8 @@ def optimize_itinerary(
     max_nights: int = 5,
     min_temp_c: float = -999.0,
     max_rain_pct: float = 100.0,
+    max_trip_budget_eur: float = 5000.0,
+    max_hotel_per_night_eur: float = 200.0,
 ) -> str:
     """Find the cheapest multi-city vacation itinerary using CP-SAT optimization.
     Use this when the user wants to plan a multi-city trip, find the cheapest route
@@ -159,12 +171,15 @@ def optimize_itinerary(
     max_nights: maximum nights per city (default 5)
     min_temp_c: minimum acceptable average temperature in Celsius (default: no constraint)
     max_rain_pct: maximum acceptable rain chance in % 0-100 (default: no constraint)
+    max_trip_budget_eur: total flight cost ceiling in EUR from corporate travel policy (default 5000.0)
+    max_hotel_per_night_eur: hotel nightly rate ceiling in EUR from corporate travel policy (default 200.0)
     Returns the optimal city order, per-leg flight details, and total cost.
     """
     from datetime import date as _date, timedelta
     from itinerary_optimizer import (
         optimize_itinerary as _optimize,
         WeatherConstraints,
+        PolicyConstraints,
     )
 
     try:
@@ -194,23 +209,30 @@ def optimize_itinerary(
             min_temp_c=min_temp_c,
             max_rain_pct=max_rain_pct,
         ),
+        policy_constraints=PolicyConstraints(
+            max_trip_budget_eur=max_trip_budget_eur,
+            max_hotel_per_night_eur=max_hotel_per_night_eur,
+        ),
     )
 
-    summary = (
-        f"Search summary: {stats['routes_searched']} flight routes queried, "
-        f"{stats['routes_with_flights']} returned results "
-        f"({stats['total_flight_options']} options total) | "
-        f"{stats['weather_records']} weather records fetched."
+    combo_str = f"{stats['combinations']:,}"
+    stats_note = (
+        f"searched {stats['routes_searched']} routes, "
+        f"{stats['total_flight_options']} flights, "
+        f"{stats['weather_records']} weather records"
     )
 
     if result is None:
-        return f"{summary}\nNo feasible itinerary found within the given constraints."
+        return (
+            f"From {combo_str} possible combinations ({stats_note}), "
+            f"no itinerary satisfied all constraints."
+        )
 
     base = _date.fromisoformat(start_date)
     lines = [
-        summary,
+        f"From {combo_str} possible combinations ({stats_note}), the cheapest feasible itinerary:",
         "",
-        f"Optimal route: {' -> '.join([origin_city] + result.city_order + [origin_city])}",
+        f"Route: {' → '.join([origin_city] + result.city_order + [origin_city])}",
         f"Total flight cost: ${result.total_cost_usd:.2f}",
         "",
     ]
@@ -220,7 +242,7 @@ def optimize_itinerary(
         dest = result.city_order[i] if i < len(result.city_order) else origin_city
         nights_str = f" — stay {result.nights_per_city[i]} nights" if i < len(result.nights_per_city) else ""
         lines.append(
-            f"  {dep}  -> {dest}  {fl.get('airline', '')} {fl.get('flight_number', '')}  "
+            f"  {dep}  → {dest}  {fl.get('airline', '')} {fl.get('flight_number', '')}  "
             f"${fl.get('price_usd', 0):.2f}{nights_str}"
         )
     return "\n".join(lines)

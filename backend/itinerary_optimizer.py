@@ -23,6 +23,12 @@ class WeatherConstraints:
 
 
 @dataclass
+class PolicyConstraints:
+    max_trip_budget_eur: float = 5000.0     # EUR 5000 total; CP-SAT enforced against USD prices (conservative)
+    max_hotel_per_night_eur: float = 200.0   # EUR 200/night; informational — hotels not yet in CP-SAT model
+
+
+@dataclass
 class ItineraryInput:
     candidate_cities: list[str]
     city_iata: dict[str, str]
@@ -36,6 +42,7 @@ class ItineraryInput:
     flights_data: dict   # (from_iata, to_iata, date_str) -> list[flight_dict]
     weather_data: dict   # (city_name, date_str) -> weather_dict
     weather_constraints: WeatherConstraints = field(default_factory=WeatherConstraints)
+    policy_constraints: PolicyConstraints = field(default_factory=PolicyConstraints)
 
 
 @dataclass
@@ -140,7 +147,7 @@ def _build_leg_options(inp: ItineraryInput) -> dict[int, list[LegOption]]:
 # CP-SAT solver
 # ---------------------------------------------------------------------------
 
-def solve_itinerary(inp: ItineraryInput) -> Optional[Itinerary]:
+def solve_itinerary(inp: ItineraryInput) -> tuple[Optional[Itinerary], int]:
     if not (1 <= inp.num_to_visit <= len(inp.candidate_cities)):
         raise ValueError("num_to_visit must be between 1 and len(candidate_cities)")
 
@@ -149,9 +156,12 @@ def solve_itinerary(inp: ItineraryInput) -> Optional[Itinerary]:
     N = len(inp.candidate_cities)
     total_days = (inp.end_date - inp.start_date).days
 
+    from math import prod
+    combinations = prod(len(options[pos]) for pos in range(k + 1))
+
     for pos in range(k + 1):
         if not options[pos]:
-            return None
+            return None, combinations
 
     model = cp_model.CpModel()
 
@@ -202,6 +212,16 @@ def solve_itinerary(inp: ItineraryInput) -> Optional[Itinerary]:
     model.add(dep_day[0] >= 0)
     model.add(dep_day[k] <= total_days)
 
+    # 9. Total flight cost ≤ policy budget ceiling (EUR budget applied to USD-priced flights — conservative)
+    if inp.policy_constraints.max_trip_budget_eur < 999999.0:
+        budget_cents = int(inp.policy_constraints.max_trip_budget_eur * 100)
+        model.add(
+            sum(opt.price_cents * x[pos][i]
+                for pos in range(k + 1)
+                for i, opt in enumerate(options[pos]))
+            <= budget_cents
+        )
+
     # Objective: minimize total flight cost
     model.minimize(
         sum(opt.price_cents * x[pos][i]
@@ -215,7 +235,7 @@ def solve_itinerary(inp: ItineraryInput) -> Optional[Itinerary]:
     status = solver.solve(model)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return None
+        return None, combinations
 
     chosen_legs: list[LegOption] = []
     for pos in range(k + 1):
@@ -235,7 +255,7 @@ def solve_itinerary(inp: ItineraryInput) -> Optional[Itinerary]:
         total_cost_usd=solver.objective_value / 100.0,
         city_order=city_order,
         nights_per_city=nights,
-    )
+    ), combinations
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +359,7 @@ def optimize_itinerary(
     min_nights: int,
     max_nights: int,
     weather_constraints: WeatherConstraints = WeatherConstraints(),
+    policy_constraints: PolicyConstraints = PolicyConstraints(),
 ) -> tuple[Optional[Itinerary], dict]:
     """Find the cheapest multi-city itinerary using live flight and weather data.
 
@@ -392,10 +413,13 @@ def optimize_itinerary(
         flights_data=flights_data,
         weather_data=weather_data,
         weather_constraints=weather_constraints,
+        policy_constraints=policy_constraints,
     )
 
     logger.info("Running CP-SAT optimizer...")
-    return solve_itinerary(inp), stats
+    result, combinations = solve_itinerary(inp)
+    stats["combinations"] = combinations
+    return result, stats
 
 
 # ---------------------------------------------------------------------------

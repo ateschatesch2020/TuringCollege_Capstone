@@ -310,10 +310,9 @@ class ChatBot {
       const m = part.match(/^!\[([^\]]*)\]\((https?:\/\/[^\)]+)\)$/);
       if (m) {
         const alt = this.escapeHtml(m[1]);
-        const src = this.escapeHtml(m[2]);
-        return `<img src="${src}" alt="${alt}" class="rounded-lg max-w-xs block mt-1 mb-2" />`;
+        return `<img src="${m[2]}" alt="${alt}" class="rounded-lg max-w-xs block mt-1 mb-2" />`;
       }
-      return this.escapeHtml(part);
+      return this.escapeHtml(part).replace(/\n/g, '<br>');
     }).join('');
   }
 

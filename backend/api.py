@@ -1,10 +1,13 @@
 import logging
+import os
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
     handlers=[
-        logging.FileHandler("app.log", encoding="utf-8"),
+        logging.FileHandler(os.path.join(_ROOT, "app.log"), encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )

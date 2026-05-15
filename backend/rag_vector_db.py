@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-file_name = "./documents/Corporate_Travel_and_Expense_Policy.pdf"
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+file_name = os.path.join(_ROOT, "documents", "Corporate_Travel_and_Expense_Policy.pdf")
 
 loader = PyPDFLoader(file_name)
 docs = loader.load()
@@ -26,7 +27,7 @@ embedding_model = OpenAIEmbeddings(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPENROUTER_API_KEY"))
 
-persist_directory = "./chroma_db"
+persist_directory = os.path.join(_ROOT, "chroma_db")
 
 print(f"creating vector database...")
 

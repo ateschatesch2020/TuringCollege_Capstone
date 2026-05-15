@@ -32,8 +32,9 @@ class ChatbotManager:
     def __init__(self, model_name: str = "openai/gpt-4o-mini"):
         """ starts the chatbot
         """
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.model_name = model_name
-        self.db_file_path = "test_history.db"
+        self.db_file_path = os.path.join(_root, "test_history.db")
         self.connection_string = f"sqlite:///{self.db_file_path}"
         self.model = ChatOpenRouter(
             model=self.model_name)
@@ -44,7 +45,7 @@ class ChatbotManager:
             model="openai/text-embedding-3-small",
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"))
-        persist_directory = "./chroma_db"
+        persist_directory = os.path.join(_root, "chroma_db")
         self.vectorestore = Chroma(
             persist_directory=persist_directory,
             embedding_function=self.embedding_model)
@@ -80,6 +81,7 @@ class ChatbotManager:
         For company policy questions, use the provided context.
         Reply in the same language as the user.
         When presenting hotel results, show each hotel image using markdown image syntax ![Hotel Name](image_url) at the start of each hotel entry.
+        When presenting itinerary optimization results, always include in your response the number of flight routes searched, weather records fetched, and total combinations evaluated, as provided in the tool output.
         """
 
         self.tools = tools.Tools.tools
@@ -237,8 +239,11 @@ class ChatbotManager:
             docs = self.retriever.invoke(query)
             context = self._format_docs(docs)
             today = date.today().strftime("%Y-%m-%d")
-            message = (f"Today's date: {today}.\n\nContext:\n{context}\n\nQuestion: {query}"
-                       if context else f"Today's date: {today}.\n\nQuestion: {query}")
+            message = (
+                f"Today's date: {today}.\n\nContext:\n{context}\n\nQuestion: {query}"
+                if context
+                else f"Today's date: {today}.\n\nQuestion: {query}"
+            )
             result = self.myagent.invoke(
                 {"messages": [HumanMessage(content=message)]},
                 config={"configurable": {"thread_id": session_id}}
@@ -258,8 +263,11 @@ class ChatbotManager:
             docs = self.retriever.invoke(query)
             context = self._format_docs(docs)
             today = date.today().strftime("%Y-%m-%d")
-            message = (f"Today's date: {today}.\n\nContext:\n{context}\n\nQuestion: {query}"
-                       if context else f"Today's date: {today}.\n\nQuestion: {query}")
+            message = (
+                f"Today's date: {today}.\n\nContext:\n{context}\n\nQuestion: {query}"
+                if context
+                else f"Today's date: {today}.\n\nQuestion: {query}"
+            )
             full_response = ""
             for msg_chunk, metadata in self.myagent.stream(
                 {"messages": [HumanMessage(content=message)]},

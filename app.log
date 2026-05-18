@@ -33,3 +33,5 @@
 2026-05-15 17:52:53,341 INFO     itinerary_optimizer: 16 city/date weather records found.
 2026-05-15 17:52:53,341 INFO     itinerary_optimizer: Running CP-SAT optimizer...
 2026-05-15 17:52:54,540 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-18 09:13:41,191 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-05-18 09:13:41,550 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.

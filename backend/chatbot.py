@@ -83,6 +83,7 @@ class ChatbotManager:
         When presenting hotel results, show each hotel image using markdown image syntax ![Hotel Name](image_url) at the start of each hotel entry.
         When presenting itinerary optimization results, always include in your response the number of flight routes searched, weather records fetched, and total combinations evaluated, as provided in the tool output.
         Trip planning and hotel searches are limited to a maximum of 7 days. If the user requests a longer window, politely explain this limit before calling any tool.
+        When planning an itinerary, only call search_hotels if the user is selecting a subset of cities from a larger pool (e.g. "pick 3 of these 5 cities") — in that case hotel nightly rates affect the total cost and should inform city selection. If the user has already specified all cities to visit (fixed set), do NOT call search_hotels during optimization; hotel costs do not influence the ordering of a fixed city list.
         """
 
         self.tools = tools.Tools.tools

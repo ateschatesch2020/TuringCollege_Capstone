@@ -46,6 +46,7 @@ class ChatbotManager:
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"))
         persist_directory = os.path.join(_root, "chroma_db")
+        self.persist_directory = persist_directory
         self.vectorestore = Chroma(
             persist_directory=persist_directory,
             embedding_function=self.embedding_model)
@@ -98,22 +99,25 @@ class ChatbotManager:
         # create chain
         self.conversation_chain = self._create_chain()
 
-    def _init_session_db(self):
+    def reload_vectorstore(self):
+        self.vectorestore = Chroma(
+            persist_directory=self.persist_directory,
+            embedding_function=self.embedding_model)
+        self.retriever = self.vectorestore.as_retriever(search_kwargs={"k": 2})
+
+    def     _init_session_db(self):
         """creates chat_sessions table in sqlite db"""
 
-        conn = sqlite3.connect(self.db_file_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS chat_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(self.db_file_path) as conn:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS chat_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
 
     def _get_session_history(self, session_id: str) -> ChatMessageHistory:
         """ gets the chat history of given session_id from sqlite database"""
@@ -175,14 +179,11 @@ class ChatbotManager:
         """ creates a row in chat_sessions table."""
         session_id = str(uuid.uuid4())
         try:
-            conn = sqlite3.connect(self.db_file_path)
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO chat_sessions (session_id, user_id, title)
-                VALUES (?, ?, ?)
-            ''', (session_id, user_id, title))
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_file_path) as conn:
+                conn.execute('''
+                    INSERT INTO chat_sessions (session_id, user_id, title)
+                    VALUES (?, ?, ?)
+                ''', (session_id, user_id, title))
             return session_id
         except Exception as e:
             logger.error("create_session failed for user %s", user_id, exc_info=True)
@@ -190,46 +191,36 @@ class ChatbotManager:
 
     def delete_session(self, session_id: str) -> str:
         """Deletes session and its messages atomically."""
-        conn = sqlite3.connect(self.db_file_path)
         try:
-            cursor = conn.cursor()
-            cursor.execute(
-                'DELETE FROM message_store WHERE session_id = ?', (session_id,))
-            cursor.execute(
-                'DELETE FROM chat_sessions WHERE session_id = ?', (session_id,))
-            conn.commit()
+            with sqlite3.connect(self.db_file_path) as conn:
+                conn.execute(
+                    'DELETE FROM message_store WHERE session_id = ?', (session_id,))
+                conn.execute(
+                    'DELETE FROM chat_sessions WHERE session_id = ?', (session_id,))
             return session_id
         except Exception as e:
-            conn.rollback()
             logger.error("delete_session failed for %s", session_id, exc_info=True)
             raise
-        finally:
-            conn.close()
 
     def list_sessions(self, user_id: str):
 
-        conn = sqlite3.connect(self.db_file_path)
-        conn.row_factory = sqlite3.Row  # enable dict-like access to rows
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT session_id, title, created_at FROM chat_sessions
-            WHERE user_id = ?
-            ORDER BY created_at DESC
-        ''', (user_id,))
-        sessions = cursor.fetchall()
-        conn.close()
+        with sqlite3.connect(self.db_file_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute('''
+                SELECT session_id, title, created_at FROM chat_sessions
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+            ''', (user_id,))
+            sessions = cursor.fetchall()
         return [dict(session) for session in sessions]
 
     def update_session_title(self, session_id: str, new_title: str):
-        conn = sqlite3.connect(self.db_file_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE chat_sessions
-            SET title = ?
-            WHERE session_id = ?
-        ''', (new_title, session_id))
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(self.db_file_path) as conn:
+            conn.execute('''
+                UPDATE chat_sessions
+                SET title = ?
+                WHERE session_id = ?
+            ''', (new_title, session_id))
 
     def get_messages(self, session_id: str):
         history = self._get_session_history(session_id)
@@ -297,30 +288,6 @@ class ChatbotManager:
             np.array([response]), k
         )
         return response
-
-    def chat_by_vector(self, session_id: str, query: str) -> str:
-        config = {"configurable": {"session_id": session_id}}
-        try:
-            vector = self.embed(query)
-            docs = self.vectorestore.similarity_search_by_vector(vector, k=2)
-            response = self.conversation_chain.invoke(
-                {"question": self._format_docs(docs)},
-                config=config)
-            return response
-        except Exception as e:
-            logger.error("chat_by_vector failed for session %s", session_id, exc_info=True)
-            return "Sorry, I encountered an error while processing your request."
-
-    def chat_by_vector_stream(self, session_id: str, query: str):
-        config = {"configurable": {"session_id": session_id}}
-        try:
-            vector = self.embed(query)
-            docs = self.vectorestore.similarity_search_by_vector(vector, k=2)
-            for doc in docs:
-                yield doc.page_content
-        except Exception as e:
-            logger.error("chat_by_vector_stream failed for session %s", session_id, exc_info=True)
-            yield "Sorry, I encountered an error while processing your request."
 
     def invoke_with_user(self, user_id: str, question: str):
         thread_id = f"user_session_{user_id}"

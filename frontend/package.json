@@ -10,8 +10,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
-  "devDependencies": {
+"devDependencies": {
     "vite": "^8.0.10"
   }
 

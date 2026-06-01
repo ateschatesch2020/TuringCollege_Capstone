@@ -40,8 +40,25 @@ class ChatBot {
     const userDisplayCharacter = document.getElementById("userDisplayCharacter");
     if (userDisplayCharacter) userDisplayCharacter.textContent = this.USER_ID.slice(0, 2).toUpperCase();
     
+    const uploadDocBtn = document.getElementById("uploadDocBtn");
+    const docFileInput = document.getElementById("docFileInput");
+    const documentList = document.getElementById("documentList");
+
+    if (uploadDocBtn) uploadDocBtn.addEventListener("click", () => docFileInput.click());
+    if (docFileInput) docFileInput.addEventListener("change", () => {
+      if (docFileInput.files[0]) {
+        this.uploadDocument(docFileInput.files[0]);
+        docFileInput.value = "";
+      }
+    });
+    if (documentList) documentList.addEventListener("click", (e) => {
+      const btn = e.target.closest(".delete-doc-btn");
+      if (btn) this.deleteDocument(btn.dataset.filename);
+    });
+
     //load all sessions on the left side of page
     await this.loadSessions();
+    await this.loadDocuments();
 
     //load chats of the active session
     const savedSession = localStorage.getItem("activeSession");
@@ -333,6 +350,104 @@ class ChatBot {
           behavior: "smooth",
         });
       }, 50);
+    }
+  }
+
+  async loadDocuments() {
+    const list = document.getElementById("documentList");
+    if (!list) return;
+    try {
+      const res = await fetch(`${this.API_URL}/documents`);
+      if (!res.ok) {
+        list.innerHTML = '<p class="text-xs text-red-400 px-2">Could not load documents.</p>';
+        return;
+      }
+      const { documents } = await res.json();
+      if (documents.length === 0) {
+        list.innerHTML = '<p class="text-xs text-gray-400 px-2">No documents uploaded.</p>';
+        return;
+      }
+      list.innerHTML = documents.map(name => `
+        <div class="flex items-center justify-between text-xs text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-50 group">
+          <span class="truncate"><i class="fa-solid fa-file-pdf text-red-400 mr-1.5"></i>${this.escapeHtml(name)}</span>
+          <button class="delete-doc-btn flex-shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all ml-1" data-filename="${this.escapeHtml(name)}" title="Delete">
+            <i class="fa-solid fa-trash text-xs"></i>
+          </button>
+        </div>`).join("");
+    } catch (e) {
+      list.innerHTML = '<p class="text-xs text-red-400 px-2">Backend unavailable.</p>';
+      console.error(e);
+    }
+  }
+
+  async uploadDocument(file) {
+    const btn = document.getElementById("uploadDocBtn");
+    const progressContainer = document.getElementById("uploadProgress");
+    const stageLabel = document.getElementById("uploadStageName");
+    const progressBar = document.getElementById("uploadProgressBar");
+
+    if (btn) btn.disabled = true;
+    if (progressContainer) progressContainer.classList.remove("hidden");
+
+    const setStage = (stage, pct) => {
+      if (stageLabel) stageLabel.textContent = stage;
+      if (progressBar) progressBar.style.width = pct + "%";
+    };
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${this.API_URL}/documents/upload`, { method: "POST", body: form });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`Upload failed: ${err.detail}`);
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop();
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) continue;
+          let evt;
+          try { evt = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          if (evt.error) { alert(`Upload failed: ${evt.error}`); return; }
+          setStage(evt.stage, evt.progress ?? 0);
+          if (evt.stage === "Complete") await this.loadDocuments();
+        }
+      }
+    } catch (e) {
+      alert("Upload failed. Is the backend running?");
+      console.error(e);
+    } finally {
+      if (btn) btn.disabled = false;
+      if (progressContainer) progressContainer.classList.add("hidden");
+      if (progressBar) progressBar.style.width = "0%";
+    }
+  }
+
+  async deleteDocument(filename) {
+    if (!confirm(`Remove "${filename}" from the knowledge base?`)) return;
+    const list = document.getElementById("documentList");
+    const row = list?.querySelector(`[data-filename="${CSS.escape(filename)}"]`)?.closest("div");
+    if (row) row.innerHTML = `<span class="text-xs text-gray-400 px-2 italic"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i>Removing from index...</span>`;
+    try {
+      const res = await fetch(`${this.API_URL}/documents/${encodeURIComponent(filename)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`Delete failed: ${err.detail}`);
+      }
+    } catch (e) {
+      alert("Delete failed. Is the backend running?");
+      console.error(e);
+    } finally {
+      await this.loadDocuments();
     }
   }
 }

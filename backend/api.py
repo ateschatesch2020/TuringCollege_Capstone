@@ -1,7 +1,11 @@
+import asyncio
+import json
 import logging
 import os
+import shutil
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_DOCUMENTS_DIR = os.path.join(_ROOT, "documents")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,8 +18,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from chatbot import ChatbotManager
+from rag.rag_vector_db import add_document, delete_document
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -107,6 +112,53 @@ def chat_endpoint(request: ChatRequest):
 
     return StreamingResponse(iterate_responses(), media_type="text/plain")
     
+
+@app.get("/documents")
+def list_documents():
+    files = sorted(f for f in os.listdir(_DOCUMENTS_DIR) if f.lower().endswith(".pdf"))
+    return {"documents": files}
+
+
+@app.post("/documents/upload")
+async def upload_document(file: UploadFile = File(...)):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    file_path = os.path.join(_DOCUMENTS_DIR, file.filename)
+    content = await file.read()
+
+    async def event_stream():
+        try:
+            yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10})}\n\n"
+            with open(file_path, "wb") as f:
+                f.write(content)
+            yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30})}\n\n"
+            chunk_count = await asyncio.to_thread(add_document, file_path)
+            yield f"data: {json.dumps({'stage': 'Refreshing index...', 'progress': 85})}\n\n"
+            await asyncio.to_thread(chatbot.reload_vectorstore)
+            yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'chunks': chunk_count, 'filename': file.filename})}\n\n"
+            logger.info("Uploaded and indexed %s (%d chunks)", file.filename, chunk_count)
+        except Exception as e:
+            logger.error("upload_document failed for %s", file.filename, exc_info=True)
+            yield f"data: {json.dumps({'stage': 'Error', 'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.delete("/documents/{filename}")
+def delete_document_endpoint(filename: str):
+    file_path = os.path.join(_DOCUMENTS_DIR, filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        removed = delete_document(file_path)
+        os.remove(file_path)
+        chatbot.reload_vectorstore()
+        logger.info("Deleted %s (%d chunks removed from ChromaDB)", filename, removed)
+        return {"filename": filename, "chunks_removed": removed}
+    except Exception as e:
+        logger.error("delete_document failed for %s", filename, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

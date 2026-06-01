@@ -35,3 +35,63 @@
 2026-05-15 17:52:54,540 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2026-05-18 09:13:41,191 INFO     faiss.loader: Loading faiss with AVX2 support.
 2026-05-18 09:13:41,550 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-05-18 11:40:34,706 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-05-18 11:40:34,760 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-05-18 11:51:56,755 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 11:51:57,289 INFO     __main__: Uploaded and indexed Corporate_Travel_and_Expense_Policy.pdf (32 chunks)
+2026-05-18 11:53:01,284 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 11:53:01,823 INFO     __main__: Uploaded and indexed Corporate_Travel_and_Expense_Policy2.pdf (32 chunks)
+2026-05-18 11:53:16,524 INFO     __main__: Deleted Corporate_Travel_and_Expense_Policy2.pdf (32 chunks removed from ChromaDB)
+2026-05-18 12:21:16,762 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-05-18 12:21:16,810 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-05-18 12:22:10,148 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 12:22:10,801 INFO     __main__: Uploaded and indexed Corporate_Travel_and_Expense_Policy2.pdf (32 chunks)
+2026-05-18 12:22:22,448 INFO     __main__: Deleted Corporate_Travel_and_Expense_Policy2.pdf (32 chunks removed from ChromaDB)
+2026-05-18 12:22:59,462 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 12:23:00,075 INFO     __main__: Uploaded and indexed Corporate_Travel_and_Expense_Policy2.pdf (32 chunks)
+2026-05-18 12:23:36,056 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 12:23:40,885 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 12:23:43,954 INFO     __main__: Uploaded and indexed SGB_2.pdf (1140 chunks)
+2026-05-18 12:39:27,719 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-05-18 12:39:27,765 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-05-18 12:44:55,764 INFO     __main__: Deleted SGB_2.pdf (0 chunks removed from ChromaDB)
+2026-05-18 12:45:22,351 INFO     __main__: Deleted Corporate_Travel_and_Expense_Policy2.pdf (0 chunks removed from ChromaDB)
+2026-05-18 12:45:33,409 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 12:45:36,729 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 12:45:39,097 INFO     __main__: Uploaded and indexed SGB_2.pdf (1140 chunks)
+2026-05-18 12:46:16,344 INFO     __main__: Deleted SGB_2.pdf (1140 chunks removed from ChromaDB)
+2026-05-18 12:49:52,402 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 12:49:56,393 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-18 12:49:59,752 INFO     __main__: Uploaded and indexed SGB_2.pdf (1140 chunks)
+2026-05-18 12:50:12,521 INFO     __main__: Deleted SGB_2.pdf (1140 chunks removed from ChromaDB)
+2026-05-21 09:03:57,132 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-05-21 09:03:57,542 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-05-22 09:22:43,992 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-05-22 09:22:44,687 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-05-22 09:28:08,957 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-22 09:28:10,473 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:28:11,535 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:29:33,165 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-22 09:29:34,220 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:29:37,504 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:30:52,277 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-22 09:30:53,684 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:31:19,119 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-22 09:31:20,498 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:31:28,451 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:31:45,661 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-22 09:31:46,827 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:31:48,784 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:32:14,718 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-22 09:32:15,973 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:32:22,438 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:33:22,322 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-05-22 09:33:23,680 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-22 09:33:28,998 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-01 10:49:12,165 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-01 10:49:12,563 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-01 11:05:21,218 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-01 11:05:22,980 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-01 11:05:24,310 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-01 16:03:33,617 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-01 16:03:33,908 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.

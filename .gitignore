@@ -17,6 +17,7 @@ frontend/node_modules/
 
 # ChromaDB
 chroma_db/
+.db.*
 
 # IDE
 .vscode/

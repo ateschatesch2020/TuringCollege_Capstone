@@ -85,15 +85,20 @@ def search_hotels(location: str, check_in_date: str, check_out_date: str = "") -
     if (check_out_dt - check_in_dt).days > 7:
         return "Hotel stay exceeds 7 days. Please limit hotel searches to a maximum of 7 nights."
     client = serpapi.Client(api_key=os.getenv("SERPAPI_KEY"))
-    raw = client.search({
-        "engine": "google_hotels",
-        "q": f"Hotels in {location}",
-        "check_in_date": check_in_date,
-        "check_out_date": check_out_date,
-        "hl": "en",
-        "currency": "EUR",
-    })
-    return _extract_hotels(raw)
+    try:
+        raw = client.search({
+            "engine": "google_hotels",
+            "q": f"Hotels in {location}",
+            "check_in_date": check_in_date,
+            "check_out_date": check_out_date,
+            "hl": "en",
+            "currency": "EUR",
+        })
+    except serpapi.exceptions.HTTPError as e:
+        logger.warning("search_hotels: SerpAPI error for %s: %s", location, e)
+        return f"Hotel search unavailable: {e}"
+    hotels = _extract_hotels(raw)
+    return hotels if hotels else "No hotels found for this location and dates."
 
 
 @tool
@@ -105,14 +110,19 @@ def search_flights(departure_id: str, arrival_id: str, outbound_date: str) -> li
     Returns a list of flights with airline, times, stops, price and baggage info.
     """
     client = serpapi.Client(api_key=os.getenv("SERPAPI_KEY"))
-    raw = client.search({
-        "engine": "google_flights",
-        "departure_id": departure_id,
-        "arrival_id": arrival_id,
-        "outbound_date": outbound_date,
-        "type": "2",
-    })
-    return _extract_flights(raw)
+    try:
+        raw = client.search({
+            "engine": "google_flights",
+            "departure_id": departure_id,
+            "arrival_id": arrival_id,
+            "outbound_date": outbound_date,
+            "type": "2",
+        })
+    except serpapi.exceptions.HTTPError as e:
+        logger.warning("search_flights: SerpAPI error for %s→%s on %s: %s", departure_id, arrival_id, outbound_date, e)
+        return f"Flight search unavailable: {e}"
+    flights = _extract_flights(raw)
+    return flights if flights else "No flights found for this route and date."
 
 
 @tool
@@ -255,6 +265,18 @@ def optimize_itinerary(
             f"${fl.get('price_usd', 0):.2f}{nights_str}"
         )
     return "\n".join(lines)
+
+
+def make_policy_tool(retriever):
+    @tool
+    def search_company_policy(query: str) -> str:
+        """Search the corporate travel policy document for rules, limits, and guidelines.
+        Use this when the user asks about expense limits, hotel budgets, flight class rules,
+        booking procedures, per diem rates, or any company travel policy question.
+        """
+        docs = retriever.invoke(query)
+        return "\n\n".join(d.page_content for d in docs) if docs else "No relevant policy found."
+    return search_company_policy
 
 
 class Tools:

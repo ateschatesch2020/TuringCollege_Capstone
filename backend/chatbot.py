@@ -1,12 +1,13 @@
 import logging
 import os
+import faiss
 import numpy as np
 import json
 import uuid
 import sqlite3
-import faiss
 import tools
-from datetime import date
+from tools import make_policy_tool
+from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
 from langchain_core.messages import HumanMessage, AIMessageChunk
@@ -24,9 +25,37 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openrouter import ChatOpenRouter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
+
+from langchain_protocol import Annotated
+from langgraph.graph import END, START, StateGraph, add_messages
+from typing import TypedDict, Optional, List, Any, Dict
+from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.checkpoint.sqlite import SqliteSaver
+import tempfile
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 load_dotenv()
 
+os.environ["LANGSMITH_TRACING"] = os.getenv("LANGSMITH_TRACING")
+os.environ["LANGSMITH_PROJECT"] = os.getenv("LANGSMITH_PROJECT")
+os.environ["LANGSMITH_ENDPOINT"] = os.getenv("LANGSMITH_ENDPOINT")
+os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+
+class State(TypedDict):
+    messages: Annotated[List[Any], add_messages]
+    success_criteria: str
+    feedback_on_work: Optional[str]
+    success_criteria_met: bool
+    user_input_needed: bool
+
+class EvaluatorOutput(BaseModel):
+    feedback: str = Field(description="Feedback on the assistant's response")
+    success_criteria_met: bool = Field(description="Whether the success criteria have been met")
+    user_input_needed: bool = Field(
+        description="True if more input is needed from the user, or clarifications, or the assistant is stuck"
+    )
 
 class ChatbotManager:
     def __init__(self, model_name: str = "openai/gpt-4o-mini"):
@@ -34,10 +63,12 @@ class ChatbotManager:
         """
         _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.model_name = model_name
-        self.db_file_path = os.path.join(_root, "test_history.db")
+        self.db = "test_history.db"
+        self.db_file_path = os.path.join(_root, self.db)
         self.connection_string = f"sqlite:///{self.db_file_path}"
         self.model = ChatOpenRouter(
             model=self.model_name)
+        self.tools = tools.Tools.tools[:]
 
         # self.embedding_model = HuggingFaceEmbeddings(
         #   model="sentence-transformers/all-MiniLM-L6-v2")
@@ -53,27 +84,16 @@ class ChatbotManager:
         self.retriever = self.vectorestore.as_retriever(search_kwargs={"k": 2})
         self._init_session_db()
 
+        self.tools.append(make_policy_tool(self.retriever))
+        self.llm_with_tools = self.model.bind_tools(self.tools)
+
+        worker_llm = self.model
+        self.worker_llm_with_tools = worker_llm.bind_tools(self.tools)
+        evaluator_llm = self.model
+        self.evaluator_llm_with_output = evaluator_llm.with_structured_output(EvaluatorOutput)
+        
         self.checkpointer = MemorySaver()
 
-        self.rephrase_system = """
-        Consider the history of the conversation. If the user uses pronouns like "it", "them",
-        which cites the term in the conversation history, change the user input including the term instead of 
-        that pronoun. If there aren't any pronouns of citation, don't change the query.
-         
-        Don't give answer, just give the corrected question.
-        """
-
-        self.system_prompt = """
-        You are a travel advisor based on the regulations of the company.   
-        If the answer is not in this context, say kindly that you don't know. Never make it up.
-        When a question required to be searched or calculated, use the tools.
-        For general advices or questions respond directly without calling tools.
-        If the question is in turkish, answer in turkish, if the question is in german, answer in german etc.
-        Use search_flights when you asked about the flights.
-
-        context:
-        {context}
-        """
         self.agent_prompt = """
         You are a travel advisor with access to real-time tools.
         NEVER say you cannot find flight, hotel, or weather information — always use the available tools to look it up.
@@ -88,16 +108,32 @@ class ChatbotManager:
         When planning an itinerary, only call search_hotels if the user is selecting a subset of cities from a larger pool (e.g. "pick 3 of these 5 cities") — in that case hotel nightly rates affect the total cost and should inform city selection. If the user has already specified all cities to visit (fixed set), do NOT call search_hotels during optimization; hotel costs do not influence the ordering of a fixed city list.
         """
 
-        self.tools = tools.Tools.tools
-        self.myagent = create_agent(
-            model=self.model,
-            tools=self.tools,
-            system_prompt=self.agent_prompt,
-            checkpointer=self.checkpointer
-        )
+        graph_builder = StateGraph(State)
 
-        # create chain
-        self.conversation_chain = self._create_chain()
+        def chatbot(state: State):
+            print(state)
+            return {"messages" : [self.llm_with_tools.invoke(state["messages"])]}
+
+        graph_builder.add_edge(START, "worker")
+
+          # Add nodes
+        graph_builder.add_node("worker", self.worker)
+        graph_builder.add_node("tools", ToolNode(tools=self.tools))
+        graph_builder.add_node("evaluator", self.evaluator)
+
+        # Add edges
+        graph_builder.add_conditional_edges(
+            "worker", self.worker_router, {"tools": "tools", "evaluator": "evaluator"}
+        )
+        graph_builder.add_edge("tools", "worker")
+        graph_builder.add_conditional_edges(
+            "evaluator", self.route_based_on_evaluation, {"worker": "worker", "END": END}
+        )
+        
+        conn = sqlite3.connect(self.db, check_same_thread=False)
+        sql_memory = SqliteSaver(conn)
+
+        self.graph = graph_builder.compile(checkpointer=sql_memory)
 
     def reload_vectorstore(self):
         self.vectorestore = Chroma(
@@ -105,7 +141,7 @@ class ChatbotManager:
             embedding_function=self.embedding_model)
         self.retriever = self.vectorestore.as_retriever(search_kwargs={"k": 2})
 
-    def     _init_session_db(self):
+    def _init_session_db(self):
         """creates chat_sessions table in sqlite db"""
 
         with sqlite3.connect(self.db_file_path) as conn:
@@ -125,55 +161,6 @@ class ChatbotManager:
             session_id=session_id,
             connection=self.connection_string
         )
-
-    def _format_docs(self, docs):
-        return "\n\n".join([d.page_content for d in docs])
-
-    def _create_chain(self):
-        """ creates the chain which combine the prompt and llm"""
-
-        rephrase_prompt = ChatPromptTemplate.from_messages([
-            ("system", self.rephrase_system),
-            MessagesPlaceholder(variable_name="history"),
-            ("human", "{question}")
-        ])
-
-        rephrase_chain = rephrase_prompt | self.model | StrOutputParser()
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", self.system_prompt),
-            MessagesPlaceholder(variable_name="history"),
-            ("human", "{question}")
-        ])
-
-        def inspect_query(query):
-            print(f"the question gone to retriever: {query} ")
-            return query
-
-        chain = (
-            RunnablePassthrough.assign(
-                search_query=rephrase_chain
-                # rephrase_chain is executed here and the output is assigned to search_query
-            )
-            |
-            RunnablePassthrough.assign(
-                # the output of the previous item of the chain is given to RunnableLambda
-                # to be written in inspect_query and then as input to retriever and then to format_docs
-                context=itemgetter("search_query")
-                | RunnableLambda(inspect_query)
-                | self.retriever | self._format_docs,
-            )
-            # prompt needs context which is the previous item of the chain
-            | prompt
-            | self.model
-            | StrOutputParser()
-        )
-
-        return RunnableWithMessageHistory(
-            chain,  # the response of the whole chain after StrOutputParser
-            self._get_session_history,
-            input_messages_key="question",
-            history_messages_key="history")
 
     def create_session(self, user_id: str, title: str) -> str:
         """ creates a row in chat_sessions table."""
@@ -230,18 +217,18 @@ class ChatbotManager:
         """ end point method for chatting """
         response = "Sorry, I encountered an error while processing your request."
         try:
-            docs = self.retriever.invoke(query)
-            context = self._format_docs(docs)
             today = date.today().strftime("%Y-%m-%d")
-            message = (
-                f"Today's date: {today}.\n\nContext:\n{context}\n\nQuestion: {query}"
-                if context
-                else f"Today's date: {today}.\n\nQuestion: {query}"
-            )
-            result = self.myagent.invoke(
-                {"messages": [HumanMessage(content=message)]},
-                config={"configurable": {"thread_id": session_id}}
-            )
+            message = f"Today's date: {today}.\n\nQuestion: {query}"
+
+            result = self.graph.invoke(
+                {
+                    "messages": [HumanMessage(content=message)],
+                    "success_criteria": "",
+                    "feedback_on_work": None,
+                    "success_criteria_met": False,
+                    "user_input_needed": False,
+                },
+                config={"configurable": {"thread_id": session_id}})
             response = result["messages"][-1].content
         except Exception as e:
             logger.error("chat failed for session %s", session_id, exc_info=True)
@@ -254,17 +241,19 @@ class ChatbotManager:
     def chat_stream(self, session_id: str, query: str):
         full_response = "Sorry, I encountered an error while processing your request."
         try:
-            docs = self.retriever.invoke(query)
-            context = self._format_docs(docs)
             today = date.today().strftime("%Y-%m-%d")
-            message = (
-                f"Today's date: {today}.\n\nContext:\n{context}\n\nQuestion: {query}"
-                if context
-                else f"Today's date: {today}.\n\nQuestion: {query}"
-            )
+            message = f"Today's date: {today}.\n\nQuestion: {query}"
             full_response = ""
-            for msg_chunk, metadata in self.myagent.stream(
-                {"messages": [HumanMessage(content=message)]},
+            #print("MESSAGE TO GRAPH:", message)
+            #print("SESSION ID:", session_id)
+            for msg_chunk, metadata in self.graph.stream(
+                {
+                    "messages": [HumanMessage(content=message)],
+                    "success_criteria": "",
+                    "feedback_on_work": None,
+                    "success_criteria_met": False,
+                    "user_input_needed": False,
+                },
                 config={"configurable": {"thread_id": session_id}},
                 stream_mode="messages"
             ):
@@ -296,9 +285,187 @@ class ChatbotManager:
             config={"configurable": {"thread_id": thread_id}}
         )
 
+    def evaluator(self, state: State) -> State:
+        last_response = state["messages"][-1].content
+
+        system_message = """You are an evaluator that determines if a task has been completed successfully by an Assistant.
+    Assess the Assistant's last response based on the given criteria. Respond with your feedback, and with your decision on whether the success criteria has been met,
+    and whether more input is needed from the user."""
+
+        user_message = f"""You are evaluating a conversation between the User and Assistant. You decide what action to take based on the last response from the Assistant.
+
+    The entire conversation with the assistant, with the user's original request and all replies, is:
+    {self.format_conversation(state["messages"])}
+
+    The success criteria for this assignment is:
+    {state["success_criteria"]}
+
+    And the final response from the Assistant that you are evaluating is:
+    {last_response}
+
+    Respond with your feedback, and decide if the success criteria is met by this response.
+    Also, decide if more user input is required, either because the assistant has a question, needs clarification, or seems to be stuck and unable to answer without help.
+
+    The Assistant has access to a tool to write files. If the Assistant says they have written a file, then you can assume they have done so.
+    Overall you should give the Assistant the benefit of the doubt if they say they've done something. But you should reject if you feel that more work should go into this.
+
+    """
+        if state["feedback_on_work"]:
+            user_message += f"Also, note that in a prior attempt from the Assistant, you provided this feedback: {state['feedback_on_work']}\n"
+            user_message += "If you're seeing the Assistant repeating the same mistakes, then consider responding that user input is required."
+
+        evaluator_messages = [
+            SystemMessage(content=system_message),
+            HumanMessage(content=user_message),
+        ]
+
+        eval_result = self.evaluator_llm_with_output.invoke(evaluator_messages)
+        new_state = {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": f"Evaluator Feedback on this answer: {eval_result.feedback}",
+                }
+            ],
+            "feedback_on_work": eval_result.feedback,
+            "success_criteria_met": eval_result.success_criteria_met,
+            "user_input_needed": eval_result.user_input_needed,
+        }
+        return new_state
+
+    def worker(self, state: State) -> Dict[str, Any]:
+        system_message = f"""You are a helpful assistant that can use tools to complete tasks.
+        You keep working on a task until either you have a question or clarification for the user, or the success criteria is met.
+        You have many tools to help you, including tools to browse the internet, navigating and retrieving web pages.
+        You have a tool to run python code, but note that you would need to include a print() statement if you wanted to receive output.
+        The current date and time is {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+        This is the success criteria:
+        {state["success_criteria"]}
+        You should reply either with a question for the user about this assignment, or with your final response.
+        If you have a question for the user, you need to reply by clearly stating your question. An example might be:
+
+        Question: please clarify whether you want a summary or a detailed answer
+
+        If you've finished, reply with the final answer, and don't ask a question; simply reply with the answer.
+        """
+
+        if state.get("feedback_on_work"):
+            system_message += f"""
+        Previously you thought you completed the assignment, but your reply was rejected because the success criteria was not met.
+        Here is the feedback on why this was rejected:
+        {state["feedback_on_work"]}
+        With this feedback, please continue the assignment, ensuring that you meet the success criteria or have a question for the user."""
+
+        # Add in the system message
+
+        found_system_message = False
+        messages = state["messages"]
+        for message in messages:
+            if isinstance(message, SystemMessage):
+                message.content = system_message
+                found_system_message = True
+
+        if not found_system_message:
+            messages = [SystemMessage(content=system_message)] + messages
+
+        # Invoke the LLM with tools
+        response = self.worker_llm_with_tools.invoke(messages)
+
+        # Return updated state
+        return {
+            "messages": [response],
+        }
+    
+        # it decides whether worker should use a tool or not
+    
+    def worker_router(self, state: State) -> str:
+        last_message = state["messages"][-1]
+
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            return "tools"
+        else:
+            return "evaluator"
+        
+    def format_conversation(self, messages: List[Any]) -> str:
+        conversation = "Conversation history:\n\n"
+        for message in messages:
+            if isinstance(message, HumanMessage):
+                conversation += f"User: {message.content}\n"
+            elif isinstance(message, AIMessage):
+                text = message.content or "[Tools use]"
+                conversation += f"Assistant: {text}\n"
+        return conversation
+    
+    def route_based_on_evaluation(self, state: State) -> str:
+        if state["success_criteria_met"] or state["user_input_needed"]:
+            return "END"
+        else:
+            return "worker"
+    
+    def evaluator(self, state: State) -> State:
+        last_response = state["messages"][-1].content
+
+        system_message = """You are an evaluator that determines if a task has been completed successfully by an Assistant.
+        Assess the Assistant's last response based on the given criteria. Respond with your feedback, and with your decision on whether the success criteria has been met,
+        and whether more input is needed from the user."""
+
+        user_message = f"""You are evaluating a conversation between the User and Assistant. You decide what action to take based on the last response from the Assistant.
+
+        The entire conversation with the assistant, with the user's original request and all replies, is:
+        {self.format_conversation(state["messages"])}
+
+        The success criteria for this assignment is:
+        {state["success_criteria"]}
+
+        And the final response from the Assistant that you are evaluating is:
+        {last_response}
+
+        Respond with your feedback, and decide if the success criteria is met by this response.
+        Also, decide if more user input is required, either because the assistant has a question, needs clarification, or seems to be stuck and unable to answer without help.
+
+        The Assistant has access to a tool to write files. If the Assistant says they have written a file, then you can assume they have done so.
+        Overall you should give the Assistant the benefit of the doubt if they say they've done something. But you should reject if you feel that more work should go into this.
+
+        """
+        if state["feedback_on_work"]:
+            user_message += f"Also, note that in a prior attempt from the Assistant, you provided this feedback: {state['feedback_on_work']}\n"
+            user_message += "If you're seeing the Assistant repeating the same mistakes, then consider responding that user input is required."
+
+        evaluator_messages = [
+            SystemMessage(content=system_message),
+            HumanMessage(content=user_message),
+        ]
+
+        eval_result = self.evaluator_llm_with_output.invoke(evaluator_messages)
+        new_state = {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": f"Evaluator Feedback on this answer: {eval_result.feedback}",
+                }
+            ],
+            "feedback_on_work": eval_result.feedback,
+            "success_criteria_met": eval_result.success_criteria_met,
+            "user_input_needed": eval_result.user_input_needed,
+        }
+        return new_state
+
+    def route_based_on_evaluation(self, state: State) -> str:
+        if state["success_criteria_met"] or state["user_input_needed"]:
+            return "END"
+        else:
+            return "worker"
+
 
 if __name__ == "__main__":
     manager = ChatbotManager()
+
+    png_bytes = manager.graph.get_graph().draw_mermaid_png()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f:
+            f.write(png_bytes)
+            tmp_path = f.name
+    os.startfile(tmp_path)
 
     user = "user123"
 
@@ -310,13 +477,13 @@ if __name__ == "__main__":
     # print(manager.chat(session_id,
     #         "What about south america?"))
 
-    response1 = manager.invoke_with_user(
-        user, "I want to you list me the flights on 23.05.2026 from Munich to Madrid direct only, all airlines")
-    print("1.Response: ", response1["messages"][-1].content)
+    response1 = manager.chat(
+        session_id, "I want to you list me the flights on this weekend from Munich to Madrid direct only, all airlines")
+    print("1.Response: ", response1)
 
-    response2 = manager.invoke_with_user(
-        user, "I want to see the return flights between 30.05 and 03.06")
-    print("2.Response: ", response2["messages"][-1].content)
+    response2 = manager.chat(
+        session_id, "I want to see the return flights from next Monday until next Wednesday")
+    print("2.Response: ", response2)
     # print(manager.chat_by_vector(session_id,
     #        "Temel gelir desteğinin faydaları özellikle hangi alanlara yönelik olmalıdır?"))
 

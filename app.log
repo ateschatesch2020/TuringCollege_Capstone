@@ -95,3 +95,573 @@
 2026-06-01 11:05:24,310 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2026-06-01 16:03:33,617 INFO     faiss.loader: Loading faiss with AVX2 support.
 2026-06-01 16:03:33,908 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-03 09:33:34,168 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-03 09:33:39,002 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-03 09:33:44,186 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-03 09:35:29,997 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-03 09:35:32,148 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-03 09:35:33,298 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-03 09:36:12,360 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-03 09:36:17,395 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-03 09:36:22,037 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-03 09:39:13,715 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-03 09:39:15,450 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 13:09:00,349 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 13:09:00,688 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 13:16:38,307 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 13:16:39,926 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 14:27:03,899 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 14:27:03,942 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 14:29:54,413 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 14:29:57,416 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 14:29:58,364 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 16:03:33,536 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 16:03:33,622 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 16:27:07,800 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 16:27:07,898 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 16:28:59,200 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 16:28:59,236 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 16:30:32,096 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 16:30:32,132 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 16:33:00,236 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 16:33:00,277 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 16:34:47,238 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 16:34:49,001 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 16:34:50,049 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 16:37:55,569 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 16:37:56,752 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 16:38:00,272 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-11 16:38:00,288 ERROR    chatbot: chat_stream failed for session fabcea17-6a7e-473b-abd8-212e24cc75fa
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 230, in chat_stream
+    for msg_chunk, metadata in self.graph.stream(
+                               ~~~~~~~~~~~~~~~~~^
+        {"messages": [HumanMessage(content=message)]},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        config={"configurable": {"thread_id": session_id}},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        stream_mode="messages"
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\main.py", line 2759, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 258, in tick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 520, in _panic_or_proceed
+    raise exc
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_executor.py", line 80, in done
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_retry.py", line 126, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 656, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 400, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 96, in chatbot
+    return {"messages" : [self.llm_with_tools.invoke(state["messages"])]}
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5739, in invoke
+    return self.bound.invoke(
+           ~~~~~~~~~~~~~~~~~^
+        input,
+        ^^^^^^
+        self._merge_configs(config),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **{**self.kwargs, **kwargs},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 471, in invoke
+    self.generate_prompt(
+    ~~~~~~~~~~~~~~~~~~~~^
+        [self._convert_input(input)],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    ).generations[0][0],
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1749, in generate_prompt
+    return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1556, in generate
+    self._generate_with_cache(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        m,
+        ^^
+    ...<2 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1853, in _generate_with_cache
+    for chunk in self._stream(messages, stop=stop, **kwargs):
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_openrouter\chat_models.py", line 509, in _stream
+    for chunk in self.client.chat.send(messages=sdk_messages, **params):
+                 ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\openrouter\chat.py", line 578, in send
+    raise errors.BadRequestResponseError(response_data, http_res, http_res_text)
+openrouter.errors.badrequestresponse_error.BadRequestResponseError: Provider returned error
+During task with name 'chatbot' and id '0b7bcc38-cfa2-4f0b-f426-a60441c905ed'
+2026-06-11 19:24:30,678 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 19:24:30,717 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 19:27:08,974 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 19:27:52,749 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-11 19:27:52,761 ERROR    chatbot: chat_stream failed for session fabcea17-6a7e-473b-abd8-212e24cc75fa
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 232, in chat_stream
+    for msg_chunk, metadata in self.graph.stream(
+                               ~~~~~~~~~~~~~~~~~^
+        {"messages": [HumanMessage(content=message)]},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        config={"configurable": {"thread_id": session_id}},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        stream_mode="messages"
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\main.py", line 2759, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 258, in tick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 520, in _panic_or_proceed
+    raise exc
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_executor.py", line 80, in done
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_retry.py", line 126, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 656, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 400, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 96, in chatbot
+    return {"messages" : [self.llm_with_tools.invoke(state["messages"])]}
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5739, in invoke
+    return self.bound.invoke(
+           ~~~~~~~~~~~~~~~~~^
+        input,
+        ^^^^^^
+        self._merge_configs(config),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **{**self.kwargs, **kwargs},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 471, in invoke
+    self.generate_prompt(
+    ~~~~~~~~~~~~~~~~~~~~^
+        [self._convert_input(input)],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    ).generations[0][0],
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1749, in generate_prompt
+    return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1556, in generate
+    self._generate_with_cache(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        m,
+        ^^
+    ...<2 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1853, in _generate_with_cache
+    for chunk in self._stream(messages, stop=stop, **kwargs):
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_openrouter\chat_models.py", line 509, in _stream
+    for chunk in self.client.chat.send(messages=sdk_messages, **params):
+                 ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\openrouter\chat.py", line 578, in send
+    raise errors.BadRequestResponseError(response_data, http_res, http_res_text)
+openrouter.errors.badrequestresponse_error.BadRequestResponseError: Provider returned error
+During task with name 'chatbot' and id '50a789ee-da04-16b9-05aa-8ab05d6188c1'
+2026-06-11 19:51:19,998 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 19:51:20,096 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 19:52:03,120 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 19:52:04,451 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-11 19:52:04,469 ERROR    chatbot: chat_stream failed for session fabcea17-6a7e-473b-abd8-212e24cc75fa
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 232, in chat_stream
+    for msg_chunk, metadata in self.graph.stream(
+                               ~~~~~~~~~~~~~~~~~^
+        {"messages": [HumanMessage(content=message)]},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        config={"configurable": {"thread_id": session_id}},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        stream_mode="messages"
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\main.py", line 2759, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 258, in tick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 520, in _panic_or_proceed
+    raise exc
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_executor.py", line 80, in done
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_retry.py", line 126, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 656, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 400, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 96, in chatbot
+    return {"messages" : [self.llm_with_tools.invoke(state["messages"])]}
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5739, in invoke
+    return self.bound.invoke(
+           ~~~~~~~~~~~~~~~~~^
+        input,
+        ^^^^^^
+        self._merge_configs(config),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **{**self.kwargs, **kwargs},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 471, in invoke
+    self.generate_prompt(
+    ~~~~~~~~~~~~~~~~~~~~^
+        [self._convert_input(input)],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    ).generations[0][0],
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1749, in generate_prompt
+    return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1556, in generate
+    self._generate_with_cache(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        m,
+        ^^
+    ...<2 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1853, in _generate_with_cache
+    for chunk in self._stream(messages, stop=stop, **kwargs):
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_openrouter\chat_models.py", line 509, in _stream
+    for chunk in self.client.chat.send(messages=sdk_messages, **params):
+                 ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\openrouter\chat.py", line 578, in send
+    raise errors.BadRequestResponseError(response_data, http_res, http_res_text)
+openrouter.errors.badrequestresponse_error.BadRequestResponseError: Provider returned error
+During task with name 'chatbot' and id '72ebd650-74be-b698-d250-5f6ad5c1dc97'
+2026-06-11 19:53:12,346 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 19:53:13,195 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-11 19:53:13,198 ERROR    chatbot: chat_stream failed for session fabcea17-6a7e-473b-abd8-212e24cc75fa
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 232, in chat_stream
+    for msg_chunk, metadata in self.graph.stream(
+                               ~~~~~~~~~~~~~~~~~^
+        {"messages": [HumanMessage(content=message)]},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        config={"configurable": {"thread_id": session_id}},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        stream_mode="messages"
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\main.py", line 2759, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 258, in tick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 520, in _panic_or_proceed
+    raise exc
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_executor.py", line 80, in done
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_retry.py", line 126, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 656, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 400, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 96, in chatbot
+    return {"messages" : [self.llm_with_tools.invoke(state["messages"])]}
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5739, in invoke
+    return self.bound.invoke(
+           ~~~~~~~~~~~~~~~~~^
+        input,
+        ^^^^^^
+        self._merge_configs(config),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **{**self.kwargs, **kwargs},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 471, in invoke
+    self.generate_prompt(
+    ~~~~~~~~~~~~~~~~~~~~^
+        [self._convert_input(input)],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    ).generations[0][0],
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1749, in generate_prompt
+    return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1556, in generate
+    self._generate_with_cache(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        m,
+        ^^
+    ...<2 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1853, in _generate_with_cache
+    for chunk in self._stream(messages, stop=stop, **kwargs):
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_openrouter\chat_models.py", line 509, in _stream
+    for chunk in self.client.chat.send(messages=sdk_messages, **params):
+                 ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\openrouter\chat.py", line 578, in send
+    raise errors.BadRequestResponseError(response_data, http_res, http_res_text)
+openrouter.errors.badrequestresponse_error.BadRequestResponseError: Provider returned error
+During task with name 'chatbot' and id '900fc714-327e-5584-793c-091d2d1e4950'
+2026-06-11 20:05:39,086 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 20:05:40,226 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 20:05:41,679 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 20:06:50,457 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 20:07:13,587 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 20:08:04,700 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 20:11:38,653 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-11 20:11:38,707 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-11 20:26:48,038 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-11 20:26:49,762 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-11 20:27:02,473 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:13:04,018 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-12 15:13:04,020 INFO     faiss.loader: Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-06-12 15:13:04,020 INFO     faiss.loader: Loading faiss.
+2026-06-12 15:13:04,053 INFO     faiss.loader: Successfully loaded faiss.
+2026-06-12 15:14:43,653 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-12 15:14:44,070 ERROR    chatbot: chat_stream failed for session f668cbb0-cf7e-4e5c-bbb7-2b3f1391ac9e
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 262, in chat_stream
+    for msg_chunk, metadata in self.graph.stream(
+                               ~~~~~~~~~~~~~~~~~^
+        {"messages": [HumanMessage(content=message)]},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        config={"configurable": {"thread_id": session_id}},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        stream_mode="messages"
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\main.py", line 2669, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\_runner.py", line 258, in tick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\_runner.py", line 520, in _panic_or_proceed
+    raise exc
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\_executor.py", line 80, in done
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\pregel\_retry.py", line 71, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\_internal\_runnable.py", line 656, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\site-packages\langgraph\_internal\_runnable.py", line 400, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 351, in worker
+    {state["success_criteria"]}
+     ~~~~~^^^^^^^^^^^^^^^^^^^^
+KeyError: 'success_criteria'
+During task with name 'worker' and id '130602c9-275b-a94c-b9bc-e4d19500ca4f'
+2026-06-12 15:45:20,700 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-12 15:45:20,701 INFO     faiss.loader: Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-06-12 15:45:20,701 INFO     faiss.loader: Loading faiss.
+2026-06-12 15:45:20,733 INFO     faiss.loader: Successfully loaded faiss.
+2026-06-12 15:46:10,343 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-12 15:46:12,944 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:46:13,663 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:46:17,177 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:48:59,249 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-12 15:49:06,481 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:49:51,011 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:50:03,650 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:53:01,092 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-12 15:53:24,288 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:53:51,559 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:53:56,927 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:54:06,191 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 15:54:18,228 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 16:22:33,981 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-12 16:22:33,983 INFO     faiss.loader: Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-06-12 16:22:33,983 INFO     faiss.loader: Loading faiss.
+2026-06-12 16:22:34,030 INFO     faiss.loader: Successfully loaded faiss.
+2026-06-12 16:27:16,989 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-12 16:27:16,990 INFO     faiss.loader: Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-06-12 16:27:16,990 INFO     faiss.loader: Loading faiss.
+2026-06-12 16:27:17,025 INFO     faiss.loader: Successfully loaded faiss.
+2026-06-12 16:27:47,813 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-12 16:27:47,814 INFO     faiss.loader: Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-06-12 16:27:47,815 INFO     faiss.loader: Loading faiss.
+2026-06-12 16:27:47,857 INFO     faiss.loader: Successfully loaded faiss.
+2026-06-12 16:29:28,785 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-12 16:29:28,786 INFO     faiss.loader: Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-06-12 16:29:28,787 INFO     faiss.loader: Loading faiss.
+2026-06-12 16:29:28,821 INFO     faiss.loader: Successfully loaded faiss.
+2026-06-12 16:40:25,965 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-12 16:40:25,966 INFO     faiss.loader: Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-06-12 16:40:25,967 INFO     faiss.loader: Loading faiss.
+2026-06-12 16:40:26,072 INFO     faiss.loader: Successfully loaded faiss.
+2026-06-12 16:43:26,017 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 16:43:26,777 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-12 16:43:31,225 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 16:43:37,967 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-12 16:44:05,170 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"

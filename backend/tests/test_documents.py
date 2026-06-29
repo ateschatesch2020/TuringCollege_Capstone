@@ -49,13 +49,13 @@ class TestAddDocument(unittest.TestCase):
     @patch("rag.rag_vector_db.delete_document")
     @patch("rag.rag_vector_db.Chroma")
     @patch("rag.rag_vector_db.RecursiveCharacterTextSplitter")
-    @patch("rag.rag_vector_db.PyPDFLoader")
+    @patch("rag.rag_vector_db._load_pdf")
     @patch("rag.rag_vector_db._get_embedding_model")
     def test_loads_pdf_and_adds_chunks(
-        self, mock_emb, mock_loader_cls, mock_splitter_cls, mock_chroma_cls, mock_del
+        self, mock_emb, mock_load_pdf, mock_splitter_cls, mock_chroma_cls, mock_del
     ):
         chunks = [MagicMock(), MagicMock()]
-        mock_loader_cls.return_value.load.return_value = [MagicMock()]
+        mock_load_pdf.return_value = [MagicMock()]
         mock_splitter_cls.return_value.split_documents.return_value = chunks
         mock_vs = MagicMock()
         mock_chroma_cls.return_value = mock_vs
@@ -64,19 +64,19 @@ class TestAddDocument(unittest.TestCase):
         from rag.rag_vector_db import add_document
         result = add_document("/docs/test.pdf", "/chroma")
 
-        mock_loader_cls.assert_called_once_with("/docs/test.pdf")
+        mock_load_pdf.assert_called_once_with("/docs/test.pdf")
         mock_vs.add_documents.assert_called_once_with(chunks)
         self.assertEqual(result, 2)
 
     @patch("rag.rag_vector_db.delete_document")
     @patch("rag.rag_vector_db.Chroma")
     @patch("rag.rag_vector_db.RecursiveCharacterTextSplitter")
-    @patch("rag.rag_vector_db.PyPDFLoader")
+    @patch("rag.rag_vector_db._load_pdf")
     @patch("rag.rag_vector_db._get_embedding_model")
     def test_deduplicates_by_deleting_existing_chunks_first(
-        self, mock_emb, mock_loader_cls, mock_splitter_cls, mock_chroma_cls, mock_del
+        self, mock_emb, mock_load_pdf, mock_splitter_cls, mock_chroma_cls, mock_del
     ):
-        mock_loader_cls.return_value.load.return_value = []
+        mock_load_pdf.return_value = []
         mock_splitter_cls.return_value.split_documents.return_value = []
         mock_chroma_cls.return_value = MagicMock()
         mock_del.return_value = 5
@@ -89,12 +89,12 @@ class TestAddDocument(unittest.TestCase):
     @patch("rag.rag_vector_db.delete_document")
     @patch("rag.rag_vector_db.Chroma")
     @patch("rag.rag_vector_db.RecursiveCharacterTextSplitter")
-    @patch("rag.rag_vector_db.PyPDFLoader")
+    @patch("rag.rag_vector_db._load_pdf")
     @patch("rag.rag_vector_db._get_embedding_model")
-    def test_uses_chunk_size_300_overlap_20(
-        self, mock_emb, mock_loader_cls, mock_splitter_cls, mock_chroma_cls, mock_del
+    def test_uses_chunk_size_600_overlap_60(
+        self, mock_emb, mock_load_pdf, mock_splitter_cls, mock_chroma_cls, mock_del
     ):
-        mock_loader_cls.return_value.load.return_value = []
+        mock_load_pdf.return_value = []
         mock_splitter_cls.return_value.split_documents.return_value = []
         mock_chroma_cls.return_value = MagicMock()
         mock_del.return_value = 0
@@ -102,7 +102,11 @@ class TestAddDocument(unittest.TestCase):
         from rag.rag_vector_db import add_document
         add_document("/docs/test.pdf", "/chroma")
 
-        mock_splitter_cls.assert_called_once_with(chunk_size=300, chunk_overlap=20)
+        mock_splitter_cls.assert_called_once_with(
+            chunk_size=600,
+            chunk_overlap=60,
+            separators=["\n\n", "\n", ". ", "? ", "! ", " ", ""],
+        )
 
 
 # ---------------------------------------------------------------------------

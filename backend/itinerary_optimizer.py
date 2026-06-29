@@ -310,7 +310,7 @@ def _fetch_flights(
                 result = search_flights.invoke(
                     {"departure_id": from_iata, "arrival_id": to_iata, "outbound_date": ds}
                 )
-                if result:
+                if isinstance(result, list) and result:
                     flights_data[key] = result
             except Exception:
                 logger.warning("search_flights failed for %s→%s on %s", from_iata, to_iata, ds, exc_info=True)

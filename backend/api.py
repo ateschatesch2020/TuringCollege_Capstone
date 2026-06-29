@@ -3,9 +3,11 @@ import json
 import logging
 import os
 import shutil
+import threading
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DOCUMENTS_DIR = os.path.join(_ROOT, "documents")
+_GENERATED_FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_files")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,16 +20,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from chatbot import ChatbotManager
 from rag.rag_vector_db import add_document, delete_document
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from pathlib import Path
 
 app = FastAPI(title="Chatbot Manager API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5500", "http://localhost:5173"],
+    allow_origins=["http://127.0.0.1:5500", "http://localhost:5173", "http://localhost:8081"],
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,
@@ -113,6 +116,11 @@ def chat_endpoint(request: ChatRequest):
     return StreamingResponse(iterate_responses(), media_type="text/plain")
     
 
+@app.get("/sessions/{session_id}/token-usage")
+def get_token_usage(session_id: str):
+    return chatbot.get_token_usage(session_id)
+
+
 @app.get("/documents")
 def list_documents():
     files = sorted(f for f in os.listdir(_DOCUMENTS_DIR) if f.lower().endswith(".pdf"))
@@ -120,28 +128,59 @@ def list_documents():
 
 
 @app.post("/documents/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(request: Request, file: UploadFile = File(...)):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
     file_path = os.path.join(_DOCUMENTS_DIR, file.filename)
     content = await file.read()
 
     async def event_stream():
+        cancel_event = threading.Event()
         try:
             yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10})}\n\n"
             with open(file_path, "wb") as f:
                 f.write(content)
+
             yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30})}\n\n"
-            chunk_count = await asyncio.to_thread(add_document, file_path)
+
+            add_task = asyncio.create_task(
+                asyncio.to_thread(add_document, file_path, cancel_event=cancel_event)
+            )
+
+            while not add_task.done():
+                await asyncio.sleep(0.5)
+                if await request.is_disconnected():
+                    cancel_event.set()
+                    add_task.cancel()
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    logger.info("Upload cancelled by client: %s", file.filename)
+                    return
+
+            chunk_count = add_task.result()
+
+            if cancel_event.is_set() or chunk_count == 0:
+                return
+
             yield f"data: {json.dumps({'stage': 'Refreshing index...', 'progress': 85})}\n\n"
             await asyncio.to_thread(chatbot.reload_vectorstore)
             yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'chunks': chunk_count, 'filename': file.filename})}\n\n"
             logger.info("Uploaded and indexed %s (%d chunks)", file.filename, chunk_count)
+        except asyncio.CancelledError:
+            return
         except Exception as e:
             logger.error("upload_document failed for %s", file.filename, exc_info=True)
             yield f"data: {json.dumps({'stage': 'Error', 'error': str(e)})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/files/{filename}")
+def download_generated_file(filename: str):
+    safe_path = Path(_GENERATED_FILES_DIR) / Path(filename).name
+    if not safe_path.exists() or not safe_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(str(safe_path), filename=Path(filename).name)
 
 
 @app.delete("/documents/{filename}")

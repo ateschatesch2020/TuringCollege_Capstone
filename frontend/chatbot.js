@@ -4,6 +4,7 @@ class ChatBot {
     this.USER_ID = "user123";
     this.currentSessionId = null;
     this.abortController = null;
+    this.uploadAbortController = null;
   }
 
   async init() {
@@ -43,6 +44,9 @@ class ChatBot {
     const uploadDocBtn = document.getElementById("uploadDocBtn");
     const docFileInput = document.getElementById("docFileInput");
     const documentList = document.getElementById("documentList");
+
+    const cancelUploadBtn = document.getElementById("cancelUploadBtn");
+    if (cancelUploadBtn) cancelUploadBtn.addEventListener("click", () => this.cancelUpload());
 
     if (uploadDocBtn) uploadDocBtn.addEventListener("click", () => docFileInput.click());
     if (docFileInput) docFileInput.addEventListener("change", () => {
@@ -178,10 +182,11 @@ class ChatBot {
 
         const chunk = decoder.decode(value, { stream: true });
         fullText += chunk;
-        contentDiv.textContent = fullText;
+        contentDiv.innerHTML = this.renderContent(fullText);
         this.scrollToBottom();
       }
       contentDiv.innerHTML = this.renderContent(fullText);
+      await this.updateTokenUsage();
     } catch (err) {
       if (err.name === "AbortError") {
         contentDiv.innerHTML = "<span class='text-xs text-red-500 italic'>Interrupted.</span>";
@@ -277,9 +282,28 @@ class ChatBot {
 
       messages.forEach((msg) => this.appendMessage(msg.role, msg.content));
       this.scrollToBottom();
+      await this.updateTokenUsage();
     } catch (e) {
       console.error(e);
     }
+  }
+
+  async updateTokenUsage() {
+    if (!this.currentSessionId) return;
+    try {
+      const res = await fetch(`${this.API_URL}/sessions/${this.currentSessionId}/token-usage`);
+      if (!res.ok) return;
+      const { percent } = await res.json();
+      if (percent == null) return;
+      const el = document.getElementById("contextUsage");
+      if (!el) return;
+      const bar = el.querySelector(".ctx-bar");
+      const label = el.querySelector(".ctx-label");
+      const color = percent < 50 ? "bg-green-400" : percent < 80 ? "bg-yellow-400" : "bg-red-400";
+      bar.className = `ctx-bar h-1 rounded-full transition-all duration-500 ${color}`;
+      bar.style.width = percent + "%";
+      label.textContent = `${percent}% context`;
+    } catch {}
   }
 
   async createNewSession() {
@@ -322,15 +346,7 @@ class ChatBot {
   }
 
   renderContent(text) {
-    const parts = text.split(/(!\[[^\]]*\]\(https?:\/\/[^\)]+\))/g);
-    return parts.map(part => {
-      const m = part.match(/^!\[([^\]]*)\]\((https?:\/\/[^\)]+)\)$/);
-      if (m) {
-        const alt = this.escapeHtml(m[1]);
-        return `<img src="${m[2]}" alt="${alt}" class="rounded-lg max-w-xs block mt-1 mb-2" />`;
-      }
-      return this.escapeHtml(part).replace(/\n/g, '<br>');
-    }).join('');
+    return marked.parse(text, { breaks: true });
   }
 
   escapeHtml(text) {
@@ -380,13 +396,24 @@ class ChatBot {
     }
   }
 
+  cancelUpload() {
+    if (this.uploadAbortController) {
+      this.uploadAbortController.abort();
+    }
+  }
+
   async uploadDocument(file) {
     const btn = document.getElementById("uploadDocBtn");
     const progressContainer = document.getElementById("uploadProgress");
     const stageLabel = document.getElementById("uploadStageName");
     const progressBar = document.getElementById("uploadProgressBar");
+    const cancelBtn = document.getElementById("cancelUploadBtn");
+
+    this.uploadAbortController = new AbortController();
+    const { signal } = this.uploadAbortController;
 
     if (btn) btn.disabled = true;
+    if (cancelBtn) cancelBtn.classList.remove("hidden");
     if (progressContainer) progressContainer.classList.remove("hidden");
 
     const setStage = (stage, pct) => {
@@ -394,10 +421,11 @@ class ChatBot {
       if (progressBar) progressBar.style.width = pct + "%";
     };
 
+    let cancelled = false;
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${this.API_URL}/documents/upload`, { method: "POST", body: form });
+      const res = await fetch(`${this.API_URL}/documents/upload`, { method: "POST", body: form, signal });
       if (!res.ok) {
         const err = await res.json();
         alert(`Upload failed: ${err.detail}`);
@@ -423,12 +451,26 @@ class ChatBot {
         }
       }
     } catch (e) {
-      alert("Upload failed. Is the backend running?");
-      console.error(e);
+      if (e.name === "AbortError") {
+        cancelled = true;
+        setStage("Cancelled", 0);
+      } else {
+        alert("Upload failed. Is the backend running?");
+        console.error(e);
+      }
     } finally {
+      this.uploadAbortController = null;
       if (btn) btn.disabled = false;
-      if (progressContainer) progressContainer.classList.add("hidden");
-      if (progressBar) progressBar.style.width = "0%";
+      if (cancelBtn) cancelBtn.classList.add("hidden");
+      if (cancelled) {
+        setTimeout(() => {
+          if (progressContainer) progressContainer.classList.add("hidden");
+          if (progressBar) progressBar.style.width = "0%";
+        }, 1500);
+      } else {
+        if (progressContainer) progressContainer.classList.add("hidden");
+        if (progressBar) progressBar.style.width = "0%";
+      }
     }
   }
 

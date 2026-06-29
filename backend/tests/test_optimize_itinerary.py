@@ -165,6 +165,15 @@ def _mock_flights(args):
     return TWO_CITY_FLIGHTS.get(key, [])
 
 
+def _mock_flights_with_no_results_route(args):
+    # Mirrors the real search_flights tool, which returns a plain string
+    # (not a list) when no flights are found for a given route/date.
+    key = (args["departure_id"], args["arrival_id"], args["outbound_date"])
+    if key == ("MUC", "MAD", "2026-06-01"):
+        return "No flights found for this route and date."
+    return TWO_CITY_FLIGHTS.get(key, [])
+
+
 def _mock_weather(args):
     return TWO_CITY_WEATHER.get((args["city"], args["date"]), {})
 
@@ -282,13 +291,25 @@ class TestOptimizeItineraryTool(unittest.TestCase):
     @patch("tools.search_weather")
     @patch("tools.search_flights")
     def test_no_flights_returns_infeasible_message(self, mock_flights, mock_weather):
-        mock_flights.invoke.side_effect = lambda args: []
+        # Real search_flights returns this string (not []) when nothing is found.
+        mock_flights.invoke.side_effect = lambda args: "No flights found for this route and date."
         mock_weather.invoke.side_effect = _mock_weather
 
         from tools import optimize_itinerary
         result = optimize_itinerary.invoke(self._TOOL_ARGS)
 
         self.assertIn("no itinerary satisfied all constraints", result)
+
+    @patch("tools.search_weather")
+    @patch("tools.search_flights")
+    def test_string_response_for_one_route_is_ignored_not_crashed(self, mock_flights, mock_weather):
+        mock_flights.invoke.side_effect = _mock_flights_with_no_results_route
+        mock_weather.invoke.side_effect = _mock_weather
+
+        from tools import optimize_itinerary
+        result = optimize_itinerary.invoke(self._TOOL_ARGS)
+
+        self.assertIn("$270.00", result)
 
     @patch("tools.search_weather")
     @patch("tools.search_flights")

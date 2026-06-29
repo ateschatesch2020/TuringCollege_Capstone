@@ -4,10 +4,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Travel Assistant</title>
+  <title>Office Helper</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
   <style>
     ::-webkit-scrollbar {
@@ -34,6 +35,18 @@
       overflow-wrap: break-word;
       word-break: break-word;
     }
+
+    .message-content ul { list-style: disc; padding-left: 1.25rem; margin: 0.25rem 0; }
+    .message-content ol { list-style: decimal; padding-left: 1.25rem; margin: 0.25rem 0; }
+    .message-content li { margin: 0.1rem 0; }
+    .message-content strong { font-weight: 600; }
+    .message-content em { font-style: italic; }
+    .message-content h1, .message-content h2, .message-content h3 { font-weight: 600; margin: 0.4rem 0 0.2rem; }
+    .message-content p { margin: 0.25rem 0; }
+    .message-content a { color: #2563eb; text-decoration: underline; }
+    .message-content a:hover { color: #1d4ed8; }
+    .message-content code { background: #f3f4f6; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.85em; }
+    .message-content pre { background: #f3f4f6; padding: 0.75rem; border-radius: 6px; overflow-x: auto; margin: 0.4rem 0; }
   </style>
 </head>
 
@@ -44,10 +57,10 @@
         <i class="fa-solid fa-brain text-white text-sm"></i>
       </div>
       <div>
-        <h1 class="font-bold text-lg tracking-tight text-gray-900">
-          Travel Assistant
+        <h1 class="font-bold text-lg tracking-tight text-blue-500">
+          Office Helper
         </h1>
-        <p class="text-xs text-gray-500">v1.0</p>
+        <p class="text-xs text-gray-500">v2.0</p>
       </div>
     </div>
     <div class="p-4">
@@ -68,7 +81,12 @@
       </div>
       <input type="file" id="docFileInput" accept=".pdf" class="hidden" />
       <div id="uploadProgress" class="hidden mt-2 mb-1 px-1">
-        <p id="uploadStageName" class="text-xs text-gray-400 mb-1 truncate"></p>
+        <div class="flex items-center justify-between mb-1">
+          <p id="uploadStageName" class="text-xs text-gray-400 truncate flex-1"></p>
+          <button id="cancelUploadBtn" class="hidden text-xs text-red-400 hover:text-red-600 ml-2 transition-colors" title="Cancel upload">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
         <div class="w-full bg-gray-100 rounded-full h-1.5">
           <div id="uploadProgressBar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
         </div>
@@ -95,6 +113,12 @@
       <div class="flex items-center gap-2 text-gray-500">
         <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
         <span class="text-xs font-medium">System Ready</span>
+        <div id="contextUsage" class="flex items-center gap-1.5 ml-3">
+          <div class="w-16 bg-gray-200 rounded-full h-1 overflow-hidden">
+            <div class="ctx-bar h-1 rounded-full bg-green-400 transition-all duration-500" style="width:0%"></div>
+          </div>
+          <span class="ctx-label text-xs text-gray-400">0% context</span>
+        </div>
       </div>
       <button id="resetBtn"
         class="text-xs text-gray-400 hover:text-red-500 transition-colors bg-gray-100 px-3 py-1.5 rounded-full"
@@ -109,8 +133,8 @@
           class="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-gray-200 border border-gray-100">
           <i class="fa-solid fa-robot text-4xl text-blue-600"></i>
         </div>
-        <h2 class="text-2xl font-bold text-gray-800 mb-2">Hello!</h2>
-        <p class="text-gray-500 max-w-md">How can I help you?</p>
+        <h2 class="text-2xl font-bold text-gray-800 mb-2">Office Helper</h2>
+        <p class="text-gray-500 max-w-md">Upload your documents and ask me to create presentations, Word files, PDFs, checklists, or comparison tables — or search the web.</p>
       </div>
     </div>
 

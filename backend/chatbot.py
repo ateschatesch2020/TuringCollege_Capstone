@@ -6,7 +6,7 @@ import json
 import uuid
 import sqlite3
 import tools
-from tools import make_policy_tool
+from tools import make_document_search_tool
 from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ from typing import TypedDict, Optional, List, Any, Dict
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.sqlite import SqliteSaver
 import tempfile
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -73,6 +73,7 @@ class ChatbotManager:
         # self.embedding_model = HuggingFaceEmbeddings(
         #   model="sentence-transformers/all-MiniLM-L6-v2")
         self.embedding_model = OpenAIEmbeddings(
+            #model="openai/text-embedding-3-small",
             model="openai/text-embedding-3-small",
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"))
@@ -81,10 +82,11 @@ class ChatbotManager:
         self.vectorestore = Chroma(
             persist_directory=persist_directory,
             embedding_function=self.embedding_model)
-        self.retriever = self.vectorestore.as_retriever(search_kwargs={"k": 2})
+        self.retriever = self.vectorestore.as_retriever(
+            search_kwargs={"k": 2})
         self._init_session_db()
 
-        self.tools.append(make_policy_tool(self.retriever))
+        self.tools.append(make_document_search_tool(self.retriever))
         self.llm_with_tools = self.model.bind_tools(self.tools)
 
         worker_llm = self.model
@@ -95,17 +97,16 @@ class ChatbotManager:
         self.checkpointer = MemorySaver()
 
         self.agent_prompt = """
-        You are a travel advisor with access to real-time tools.
-        NEVER say you cannot find flight, hotel, or weather information — always use the available tools to look it up.
-        Do not rely on training data for flight schedules, hotel availability, prices, or any real-time data; always call the appropriate tool.
-        The Context provided with each message is the official company travel policy — treat every rule in it as a mandatory constraint. Before presenting any tool result (flights, hotels, itineraries), verify it complies with the policy. Exclude any result that violates a policy rule and briefly explain why it was excluded.
-        For hotel searches, use the hotel tool with the location name (city or area) as the parameter.
-        For company policy questions, use the provided context.
-        Reply in the same language as the user.
-        When presenting hotel results, show each hotel image using markdown image syntax ![Hotel Name](image_url) at the start of each hotel entry.
-        When presenting itinerary optimization results, always include in your response the number of flight routes searched, weather records fetched, and total combinations evaluated, as provided in the tool output.
-        Trip planning and hotel searches are limited to a maximum of 7 days. If the user requests a longer window, politely explain this limit before calling any tool.
-        When planning an itinerary, only call search_hotels if the user is selecting a subset of cities from a larger pool (e.g. "pick 3 of these 5 cities") — in that case hotel nightly rates affect the total cost and should inform city selection. If the user has already specified all cities to visit (fixed set), do NOT call search_hotels during optimization; hotel costs do not influence the ordering of a fixed city list.
+        You are an Office Helper assistant. Help users work with their company documents and create professional outputs.
+        You have tools to search uploaded documents, search the web, and generate presentations, Word documents, and PDF files.
+
+        CRITICAL RULES:
+        - For ANY question about uploaded documents, ALWAYS use the search_documents tool first before answering.
+        - For current information not available in uploaded documents, use web_search.
+        - When the user requests a presentation, Word document, or PDF file, use the appropriate generation tool and include the download link in your response.
+        - For checklists, comparison tables, or price lists shown in chat, generate them as formatted markdown — no file tool needed unless the user asks for a downloadable file.
+        - NEVER invent document content. Only use what search_documents returns.
+        - Reply in the user's language.
         """
 
         graph_builder = StateGraph(State)
@@ -118,7 +119,7 @@ class ChatbotManager:
 
           # Add nodes
         graph_builder.add_node("worker", self.worker)
-        graph_builder.add_node("tools", ToolNode(tools=self.tools))
+        graph_builder.add_node("tools", ToolNode(tools=self.tools, handle_tool_errors=True))
         graph_builder.add_node("evaluator", self.evaluator)
 
         # Add edges
@@ -134,6 +135,23 @@ class ChatbotManager:
         sql_memory = SqliteSaver(conn)
 
         self.graph = graph_builder.compile(checkpointer=sql_memory)
+
+    def get_token_usage(self, session_id: str) -> dict:
+        import tiktoken
+        enc = tiktoken.encoding_for_model("gpt-4o-mini")
+        CONTEXT_WINDOW = 128_000
+        try:
+            config = {"configurable": {"thread_id": session_id}}
+            state = self.graph.get_state(config)
+            messages = state.values.get("messages", []) if state.values else []
+            used = sum(
+                len(enc.encode(str(m.content)))
+                for m in messages if getattr(m, "content", None)
+            )
+            used += 500  # system prompt overhead estimate
+        except Exception:
+            used = 0
+        return {"used": used, "total": CONTEXT_WINDOW, "percent": round(used / CONTEXT_WINDOW * 100, 1)}
 
     def reload_vectorstore(self):
         self.vectorestore = Chroma(
@@ -285,59 +303,38 @@ class ChatbotManager:
             config={"configurable": {"thread_id": thread_id}}
         )
 
-    def evaluator(self, state: State) -> State:
-        last_response = state["messages"][-1].content
-
-        system_message = """You are an evaluator that determines if a task has been completed successfully by an Assistant.
-    Assess the Assistant's last response based on the given criteria. Respond with your feedback, and with your decision on whether the success criteria has been met,
-    and whether more input is needed from the user."""
-
-        user_message = f"""You are evaluating a conversation between the User and Assistant. You decide what action to take based on the last response from the Assistant.
-
-    The entire conversation with the assistant, with the user's original request and all replies, is:
-    {self.format_conversation(state["messages"])}
-
-    The success criteria for this assignment is:
-    {state["success_criteria"]}
-
-    And the final response from the Assistant that you are evaluating is:
-    {last_response}
-
-    Respond with your feedback, and decide if the success criteria is met by this response.
-    Also, decide if more user input is required, either because the assistant has a question, needs clarification, or seems to be stuck and unable to answer without help.
-
-    The Assistant has access to a tool to write files. If the Assistant says they have written a file, then you can assume they have done so.
-    Overall you should give the Assistant the benefit of the doubt if they say they've done something. But you should reject if you feel that more work should go into this.
-
-    """
-        if state["feedback_on_work"]:
-            user_message += f"Also, note that in a prior attempt from the Assistant, you provided this feedback: {state['feedback_on_work']}\n"
-            user_message += "If you're seeing the Assistant repeating the same mistakes, then consider responding that user input is required."
-
-        evaluator_messages = [
-            SystemMessage(content=system_message),
-            HumanMessage(content=user_message),
-        ]
-
-        eval_result = self.evaluator_llm_with_output.invoke(evaluator_messages)
-        new_state = {
-            "messages": [
-                {
-                    "role": "assistant",
-                    "content": f"Evaluator Feedback on this answer: {eval_result.feedback}",
-                }
-            ],
-            "feedback_on_work": eval_result.feedback,
-            "success_criteria_met": eval_result.success_criteria_met,
-            "user_input_needed": eval_result.user_input_needed,
-        }
-        return new_state
+    def _close_orphaned_tool_calls(self, messages: List[Any]) -> List[Any]:
+        """Inserts a placeholder ToolMessage for any tool_call left unanswered
+        (e.g. by a prior run that crashed mid tool-execution), so the message
+        history is always valid before it's sent to the LLM provider."""
+        fixed = []
+        for i, message in enumerate(messages):
+            fixed.append(message)
+            if not (isinstance(message, AIMessage) and message.tool_calls):
+                continue
+            pending = {tc["id"] for tc in message.tool_calls}
+            for next_msg in messages[i + 1:]:
+                if isinstance(next_msg, ToolMessage):
+                    pending.discard(next_msg.tool_call_id)
+                else:
+                    break
+            for tool_call_id in pending:
+                fixed.append(ToolMessage(
+                    content="Tool call was interrupted before it could complete.",
+                    tool_call_id=tool_call_id,
+                    status="error",
+                ))
+        return fixed
 
     def worker(self, state: State) -> Dict[str, Any]:
-        system_message = f"""You are a helpful assistant that can use tools to complete tasks.
-        You keep working on a task until either you have a question or clarification for the user, or the success criteria is met.
-        You have many tools to help you, including tools to browse the internet, navigating and retrieving web pages.
-        You have a tool to run python code, but note that you would need to include a print() statement if you wanted to receive output.
+        system_message = f"""You are an Office Helper assistant. Help users work with their company documents and create professional outputs.
+        You have tools to search uploaded documents, search the web, and generate presentations, Word documents, and PDF files.
+        For ANY question about uploaded documents, ALWAYS use search_documents first.
+        For current information not in documents, use web_search.
+        When generating files, use the appropriate tool and include the download link in your response.
+        For checklists, tables, or lists shown in chat, generate them as formatted markdown without using a file tool.
+        NEVER invent document content — only use what search_documents returns.
+        Reply in the user's language.
         The current date and time is {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
         This is the success criteria:
@@ -369,6 +366,8 @@ class ChatbotManager:
         if not found_system_message:
             messages = [SystemMessage(content=system_message)] + messages
 
+        messages = self._close_orphaned_tool_calls(messages)
+
         # Invoke the LLM with tools
         response = self.worker_llm_with_tools.invoke(messages)
 
@@ -396,13 +395,7 @@ class ChatbotManager:
                 text = message.content or "[Tools use]"
                 conversation += f"Assistant: {text}\n"
         return conversation
-    
-    def route_based_on_evaluation(self, state: State) -> str:
-        if state["success_criteria_met"] or state["user_input_needed"]:
-            return "END"
-        else:
-            return "worker"
-    
+
     def evaluator(self, state: State) -> State:
         last_response = state["messages"][-1].content
 

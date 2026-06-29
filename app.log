@@ -665,3 +665,661 @@ ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
 2026-06-12 16:43:31,225 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2026-06-12 16:43:37,967 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
 2026-06-12 16:44:05,170 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 14:40:12,424 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-15 14:40:12,898 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-15 14:59:20,099 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 14:59:20,764 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-15 14:59:22,870 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-15 15:00:21,046 INFO     itinerary_optimizer: 15 route/date combinations found.
+2026-06-15 15:00:21,046 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-15 15:00:23,426 INFO     itinerary_optimizer: 18 city/date weather records found.
+2026-06-15 15:00:23,427 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-15 15:00:24,334 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:00:27,375 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:12:06,194 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:12:06,617 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-15 15:12:06,783 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-15 15:12:14,543 INFO     itinerary_optimizer: 15 route/date combinations found.
+2026-06-15 15:12:14,544 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-15 15:12:16,609 INFO     itinerary_optimizer: 18 city/date weather records found.
+2026-06-15 15:12:16,609 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-15 15:12:17,247 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:12:21,314 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:13:22,253 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:13:23,223 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-15 15:13:31,611 INFO     itinerary_optimizer: 15 route/date combinations found.
+2026-06-15 15:13:31,611 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-15 15:13:33,264 INFO     itinerary_optimizer: 18 city/date weather records found.
+2026-06-15 15:13:33,265 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-15 15:13:34,194 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:13:36,618 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:14:01,148 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:14:05,469 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:15:25,032 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:15:26,282 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-15 15:16:57,000 INFO     itinerary_optimizer: 36 route/date combinations found.
+2026-06-15 15:16:57,000 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-15 15:17:00,008 INFO     itinerary_optimizer: 24 city/date weather records found.
+2026-06-15 15:17:00,009 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-15 15:17:01,773 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:17:08,952 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:24:16,149 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:24:18,679 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:24:20,545 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-15 15:26:25,747 INFO     itinerary_optimizer: 36 route/date combinations found.
+2026-06-15 15:26:25,747 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-15 15:26:28,061 INFO     itinerary_optimizer: 24 city/date weather records found.
+2026-06-15 15:26:28,062 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-15 15:26:29,309 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:26:31,180 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:27:28,292 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:27:29,988 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:27:39,768 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:29:05,707 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:29:06,814 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-15 15:29:28,065 INFO     itinerary_optimizer: 36 route/date combinations found.
+2026-06-15 15:29:28,065 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-15 15:29:30,938 INFO     itinerary_optimizer: 24 city/date weather records found.
+2026-06-15 15:29:30,938 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-15 15:29:31,901 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:29:33,662 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:52:36,202 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:52:38,014 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-15 15:56:01,589 INFO     itinerary_optimizer: 36 route/date combinations found.
+2026-06-15 15:56:01,589 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-15 15:56:04,940 INFO     itinerary_optimizer: 24 city/date weather records found.
+2026-06-15 15:56:04,941 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-15 15:56:05,405 ERROR    chatbot: chat_stream failed for session 5367b772-9da5-41d2-8f1f-45bcf7503655
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 249, in chat_stream
+    for msg_chunk, metadata in self.graph.stream(
+                               ~~~~~~~~~~~~~~~~~^
+        {
+        ^
+    ...<7 lines>...
+        stream_mode="messages"
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\main.py", line 2759, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 258, in tick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 520, in _panic_or_proceed
+    raise exc
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_executor.py", line 80, in done
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_retry.py", line 126, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 656, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 400, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\prebuilt\tool_node.py", line 819, in _func
+    outputs = list(
+        executor.map(self._run_one, tool_calls, input_types, tool_runtimes)
+    )
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 639, in result_iterator
+    yield _result_or_cancel(fs.pop())
+          ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 311, in _result_or_cancel
+    return fut.result(timeout)
+           ~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 450, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\runnables\config.py", line 610, in _wrapped_fn
+    return contexts.pop().run(fn, *args)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\prebuilt\tool_node.py", line 1032, in _run_one
+    return self._execute_tool_sync(tool_request, input_type, config)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\prebuilt\tool_node.py", line 981, in _execute_tool_sync
+    content = _handle_tool_error(e, flag=self._handle_tool_errors)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\prebuilt\tool_node.py", line 432, in _handle_tool_error
+    content = flag(e)  # type: ignore [assignment, call-arg]
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\prebuilt\tool_node.py", line 389, in _default_handle_tool_errors
+    raise e
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\prebuilt\tool_node.py", line 938, in _execute_tool_sync
+    response = tool.invoke(call_args, config)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\tools\base.py", line 642, in invoke
+    return self.run(tool_input, **kwargs)
+           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\tools\base.py", line 1001, in run
+    raise error_to_raise
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\tools\base.py", line 967, in run
+    response = context.run(self._run, *tool_args, **tool_kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\tools\structured.py", line 97, in _run
+    return self.func(*args, **kwargs)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\tools.py", line 217, in optimize_itinerary
+    result, stats = _optimize(
+                    ~~~~~~~~~^
+        candidate_cities=cities,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<15 lines>...
+        ),
+        ^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\itinerary_optimizer.py", line 420, in optimize_itinerary
+    result, combinations = solve_itinerary(inp)
+                           ~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\itinerary_optimizer.py", line 154, in solve_itinerary
+    options = _build_leg_options(inp)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\itinerary_optimizer.py", line 127, in _build_leg_options
+    add_options(0, inp.origin_iata, -1, city, idx[city], outbound_days)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\itinerary_optimizer.py", line 105, in add_options
+    price = fl.get("price_usd")
+            ^^^^^^
+AttributeError: 'str' object has no attribute 'get'
+During task with name 'tools' and id 'e1acf89a-b8c1-8f4b-b0c8-5c96076fc3a8'
+2026-06-15 15:58:31,251 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:58:42,836 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:59:00,019 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:59:10,061 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:59:17,609 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 15:59:27,348 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:00:56,382 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:00:57,802 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:01:41,110 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:01:51,016 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:04:58,249 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-15 16:04:58,517 ERROR    chatbot: chat_stream failed for session 5367b772-9da5-41d2-8f1f-45bcf7503655
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 249, in chat_stream
+    for msg_chunk, metadata in self.graph.stream(
+                               ~~~~~~~~~~~~~~~~~^
+        {
+        ^
+    ...<7 lines>...
+        stream_mode="messages"
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\main.py", line 2759, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 258, in tick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 520, in _panic_or_proceed
+    raise exc
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_executor.py", line 80, in done
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_retry.py", line 126, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 656, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 400, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 373, in worker
+    response = self.worker_llm_with_tools.invoke(messages)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5739, in invoke
+    return self.bound.invoke(
+           ~~~~~~~~~~~~~~~~~^
+        input,
+        ^^^^^^
+        self._merge_configs(config),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **{**self.kwargs, **kwargs},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 471, in invoke
+    self.generate_prompt(
+    ~~~~~~~~~~~~~~~~~~~~^
+        [self._convert_input(input)],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    ).generations[0][0],
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1749, in generate_prompt
+    return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1556, in generate
+    self._generate_with_cache(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        m,
+        ^^
+    ...<2 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1853, in _generate_with_cache
+    for chunk in self._stream(messages, stop=stop, **kwargs):
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_openrouter\chat_models.py", line 509, in _stream
+    for chunk in self.client.chat.send(messages=sdk_messages, **params):
+                 ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\openrouter\chat.py", line 578, in send
+    raise errors.BadRequestResponseError(response_data, http_res, http_res_text)
+openrouter.errors.badrequestresponse_error.BadRequestResponseError: Provider returned error
+During task with name 'worker' and id 'bdc6e393-0160-3ce1-0358-087e6f39acd3'
+2026-06-15 16:05:44,234 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-15 16:05:44,288 ERROR    chatbot: chat_stream failed for session 5367b772-9da5-41d2-8f1f-45bcf7503655
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 249, in chat_stream
+    for msg_chunk, metadata in self.graph.stream(
+                               ~~~~~~~~~~~~~~~~~^
+        {
+        ^
+    ...<7 lines>...
+        stream_mode="messages"
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\main.py", line 2759, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 258, in tick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 520, in _panic_or_proceed
+    raise exc
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_executor.py", line 80, in done
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_retry.py", line 126, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 656, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 400, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 373, in worker
+    response = self.worker_llm_with_tools.invoke(messages)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5739, in invoke
+    return self.bound.invoke(
+           ~~~~~~~~~~~~~~~~~^
+        input,
+        ^^^^^^
+        self._merge_configs(config),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **{**self.kwargs, **kwargs},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 471, in invoke
+    self.generate_prompt(
+    ~~~~~~~~~~~~~~~~~~~~^
+        [self._convert_input(input)],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    ).generations[0][0],
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1749, in generate_prompt
+    return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1556, in generate
+    self._generate_with_cache(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        m,
+        ^^
+    ...<2 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1853, in _generate_with_cache
+    for chunk in self._stream(messages, stop=stop, **kwargs):
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_openrouter\chat_models.py", line 509, in _stream
+    for chunk in self.client.chat.send(messages=sdk_messages, **params):
+                 ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\openrouter\chat.py", line 578, in send
+    raise errors.BadRequestResponseError(response_data, http_res, http_res_text)
+openrouter.errors.badrequestresponse_error.BadRequestResponseError: Provider returned error
+During task with name 'worker' and id 'bacb3f01-0473-6170-59f6-22feaf3e9edc'
+2026-06-15 16:06:03,613 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-06-15 16:06:03,641 ERROR    chatbot: chat_stream failed for session 5367b772-9da5-41d2-8f1f-45bcf7503655
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 249, in chat_stream
+    for msg_chunk, metadata in self.graph.stream(
+                               ~~~~~~~~~~~~~~~~~^
+        {
+        ^
+    ...<7 lines>...
+        stream_mode="messages"
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\main.py", line 2759, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 258, in tick
+    _panic_or_proceed(
+    ~~~~~~~~~~~~~~~~~^
+        futures.done.union(f for f, t in futures.items() if t is not None),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        panic=reraise,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_runner.py", line 520, in _panic_or_proceed
+    raise exc
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_executor.py", line 80, in done
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 395, in __get_result
+    raise self._exception
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\atesa\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\pregel\_retry.py", line 126, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 656, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 400, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\backend\chatbot.py", line 373, in worker
+    response = self.worker_llm_with_tools.invoke(messages)
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\runnables\base.py", line 5739, in invoke
+    return self.bound.invoke(
+           ~~~~~~~~~~~~~~~~~^
+        input,
+        ^^^^^^
+        self._merge_configs(config),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **{**self.kwargs, **kwargs},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 471, in invoke
+    self.generate_prompt(
+    ~~~~~~~~~~~~~~~~~~~~^
+        [self._convert_input(input)],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    ).generations[0][0],
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1749, in generate_prompt
+    return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1556, in generate
+    self._generate_with_cache(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        m,
+        ^^
+    ...<2 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_core\language_models\chat_models.py", line 1853, in _generate_with_cache
+    for chunk in self._stream(messages, stop=stop, **kwargs):
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\langchain_openrouter\chat_models.py", line 509, in _stream
+    for chunk in self.client.chat.send(messages=sdk_messages, **params):
+                 ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\atesa\source\repos\TuringCollege_Sprint3Task\.venv\Lib\site-packages\openrouter\chat.py", line 578, in send
+    raise errors.BadRequestResponseError(response_data, http_res, http_res_text)
+openrouter.errors.badrequestresponse_error.BadRequestResponseError: Provider returned error
+During task with name 'worker' and id 'fd7cc6ee-e4f9-618d-de77-149e4c776194'
+2026-06-15 16:15:31,282 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:15:43,571 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:16:07,398 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:16:17,330 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:16:18,005 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-15 16:16:18,840 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-15 16:16:20,844 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:16:44,264 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:25:39,026 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:25:54,207 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-15 16:26:04,654 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 15:27:26,985 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-16 15:27:27,020 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-16 15:27:53,395 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-16 15:27:53,430 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-16 15:28:18,915 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 15:28:21,209 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 15:28:40,815 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 15:28:41,498 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-16 15:30:47,735 INFO     itinerary_optimizer: 36 route/date combinations found.
+2026-06-16 15:30:47,735 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-16 15:30:47,904 WARNING  tools: search_weather: no forecast data for Vilnius on 2026-07-10
+2026-06-16 15:30:48,008 WARNING  tools: search_weather: no forecast data for Vilnius on 2026-07-11
+2026-06-16 15:30:48,123 WARNING  tools: search_weather: no forecast data for Vilnius on 2026-07-12
+2026-06-16 15:30:48,250 WARNING  tools: search_weather: no forecast data for Vilnius on 2026-07-13
+2026-06-16 15:30:48,366 WARNING  tools: search_weather: no forecast data for Vilnius on 2026-07-14
+2026-06-16 15:30:48,484 WARNING  tools: search_weather: no forecast data for Vilnius on 2026-07-15
+2026-06-16 15:30:48,614 WARNING  tools: search_weather: no forecast data for Vilnius on 2026-07-16
+2026-06-16 15:30:48,741 WARNING  tools: search_weather: no forecast data for Vilnius on 2026-07-17
+2026-06-16 15:30:48,842 WARNING  tools: search_weather: no forecast data for Kaunas on 2026-07-10
+2026-06-16 15:30:48,956 WARNING  tools: search_weather: no forecast data for Kaunas on 2026-07-11
+2026-06-16 15:30:49,063 WARNING  tools: search_weather: no forecast data for Kaunas on 2026-07-12
+2026-06-16 15:30:49,182 WARNING  tools: search_weather: no forecast data for Kaunas on 2026-07-13
+2026-06-16 15:30:49,335 WARNING  tools: search_weather: no forecast data for Kaunas on 2026-07-14
+2026-06-16 15:30:49,481 WARNING  tools: search_weather: no forecast data for Kaunas on 2026-07-15
+2026-06-16 15:30:49,589 WARNING  tools: search_weather: no forecast data for Kaunas on 2026-07-16
+2026-06-16 15:30:49,798 WARNING  tools: search_weather: no forecast data for Kaunas on 2026-07-17
+2026-06-16 15:30:49,918 WARNING  tools: search_weather: no forecast data for Klaipeda on 2026-07-10
+2026-06-16 15:30:50,049 WARNING  tools: search_weather: no forecast data for Klaipeda on 2026-07-11
+2026-06-16 15:30:50,157 WARNING  tools: search_weather: no forecast data for Klaipeda on 2026-07-12
+2026-06-16 15:30:50,256 WARNING  tools: search_weather: no forecast data for Klaipeda on 2026-07-13
+2026-06-16 15:30:50,370 WARNING  tools: search_weather: no forecast data for Klaipeda on 2026-07-14
+2026-06-16 15:30:50,495 WARNING  tools: search_weather: no forecast data for Klaipeda on 2026-07-15
+2026-06-16 15:30:50,635 WARNING  tools: search_weather: no forecast data for Klaipeda on 2026-07-16
+2026-06-16 15:30:50,755 WARNING  tools: search_weather: no forecast data for Klaipeda on 2026-07-17
+2026-06-16 15:30:50,756 INFO     itinerary_optimizer: 0 city/date weather records found.
+2026-06-16 15:30:50,756 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-16 15:30:52,400 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 15:31:09,736 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 16:10:45,337 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-16 16:10:45,494 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-16 16:12:12,415 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 16:12:13,666 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-16 16:14:47,863 INFO     itinerary_optimizer: 36 route/date combinations found.
+2026-06-16 16:14:47,863 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-16 16:14:50,918 INFO     itinerary_optimizer: 24 city/date weather records found.
+2026-06-16 16:14:50,918 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-16 16:14:51,848 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 16:14:53,438 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-16 16:15:18,423 INFO     itinerary_optimizer: 36 route/date combinations found.
+2026-06-16 16:15:18,424 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-16 16:15:20,732 INFO     itinerary_optimizer: 24 city/date weather records found.
+2026-06-16 16:15:20,732 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-16 16:15:21,542 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 16:15:22,521 INFO     itinerary_optimizer: Fetching flight data for 3 candidate cities...
+2026-06-16 16:15:46,950 INFO     itinerary_optimizer: 36 route/date combinations found.
+2026-06-16 16:15:46,951 INFO     itinerary_optimizer: Fetching weather data...
+2026-06-16 16:15:49,536 INFO     itinerary_optimizer: 24 city/date weather records found.
+2026-06-16 16:15:49,536 INFO     itinerary_optimizer: Running CP-SAT optimizer...
+2026-06-16 16:15:50,309 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-16 16:15:53,152 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-18 17:52:05,132 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-18 17:52:05,223 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-18 17:57:43,786 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-18 17:57:44,804 ERROR    __main__: delete_document failed for Distributed Ledgers and Operations.pdf
+Traceback (most recent call last):
+  File "C:\Users\atesa\source\repos\TuringCollege_Capstone\backend\api.py", line 154, in delete_document_endpoint
+    os.remove(file_path)
+    ~~~~~~~~~^^^^^^^^^^^
+PermissionError: [WinError 32] Dosya başka bir işlem tarafından kullanıldığından bu işlem dosyaya erişemiyor: 'C:\\Users\\atesa\\source\\repos\\TuringCollege_Capstone\\documents\\Distributed Ledgers and Operations.pdf'
+2026-06-18 17:57:46,699 INFO     __main__: Uploaded and indexed Distributed Ledgers and Operations.pdf (291 chunks)
+2026-06-18 17:57:50,945 INFO     __main__: Deleted Distributed Ledgers and Operations.pdf (291 chunks removed from ChromaDB)
+2026-06-18 17:58:33,066 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-18 17:58:35,900 INFO     __main__: Uploaded and indexed Distributed Ledgers and Operations.pdf (291 chunks)
+2026-06-18 18:41:56,863 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-18 18:41:56,965 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-18 18:59:39,992 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-18 18:59:43,384 INFO     __main__: Uploaded and indexed A Survey on Blockchain for Information Systems Management.pdf (434 chunks)
+2026-06-19 11:56:08,809 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-19 11:56:09,120 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-29 10:37:18,319 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-29 10:37:18,701 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-29 10:49:01,578 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-29 10:49:01,626 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-29 10:49:27,305 ERROR    fastapi: Form data requires "python-multipart" to be installed. 
+You can install "python-multipart" with: 
+
+pip install python-multipart
+
+2026-06-29 10:50:36,787 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-29 10:50:37,032 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-29 10:52:39,748 INFO     __main__: Deleted Corporate_Travel_and_Expense_Policy.pdf (5 chunks removed from ChromaDB)
+2026-06-29 10:53:21,417 INFO     __main__: Deleted A Survey on Blockchain for Information Systems Management.pdf (0 chunks removed from ChromaDB)
+2026-06-29 10:53:25,460 INFO     __main__: Deleted Distributed Ledgers and Operations.pdf (0 chunks removed from ChromaDB)
+2026-06-29 10:55:34,519 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 10:55:42,380 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 10:55:43,716 INFO     __main__: Uploaded and indexed Blockchain-technology-in-Construction-2018-12-17.pdf (32 chunks)
+2026-06-29 11:11:40,274 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-29 11:11:40,320 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-29 11:28:07,025 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:28:07,728 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:28:08,493 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:28:09,115 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:28:11,370 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:28:49,297 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:28:49,721 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 400 Bad Request"
+2026-06-29 11:28:50,337 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:28:51,664 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:30:54,737 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:30:55,043 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 400 Bad Request"
+2026-06-29 11:30:55,690 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 11:30:56,882 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 12:02:00,210 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-29 12:02:00,588 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-29 12:07:24,142 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 12:07:25,017 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 12:07:25,970 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 12:07:28,314 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 12:12:02,189 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 12:12:02,610 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 12:12:03,705 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 12:12:05,939 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 12:19:27,047 INFO     faiss.loader: Loading faiss with AVX2 support.
+2026-06-29 12:19:27,260 INFO     faiss.loader: Successfully loaded faiss with AVX2 support.
+2026-06-29 13:02:48,393 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:02:49,003 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 13:02:50,336 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:02:54,776 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:13:47,353 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:13:48,103 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:13:49,062 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:16:17,551 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:16:17,851 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 13:16:18,828 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:16:20,553 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:16:45,664 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:16:45,872 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 13:16:46,815 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:16:49,485 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:17:46,013 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:17:46,301 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 13:17:47,405 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:17:48,802 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:33:31,760 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:33:32,028 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 13:33:33,072 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:33:36,391 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:49:32,249 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:49:32,481 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 13:49:33,730 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:49:37,842 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:50:07,963 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:50:08,236 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/embeddings "HTTP/1.1 200 OK"
+2026-06-29 13:50:09,510 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:50:12,667 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:51:35,229 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:51:37,745 INFO     tools: generate_pdf_document: created e652bafef8cf4f3ebc2740a845cfbcf3.pdf
+2026-06-29 13:51:38,735 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-29 13:51:39,985 INFO     httpx: HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"

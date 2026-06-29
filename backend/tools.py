@@ -1,283 +1,211 @@
 import logging
-from langchain_core.tools import tool
+import json
 import os
+import uuid
+from langchain_core.tools import tool
 from dotenv import load_dotenv
 load_dotenv()
 import serpapi
 
 logger = logging.getLogger(__name__)
 
+_GENERATED_FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_files")
+_API_BASE_URL = "http://localhost:8001"
 
-def _extract_flights(raw):
-    all_flights = []
-    for group in raw.get("best_flights", []) + raw.get("other_flights", []):
-        legs = group.get("flights", [])
-        if not legs:
+
+def _ensure_generated_dir():
+    os.makedirs(_GENERATED_FILES_DIR, exist_ok=True)
+
+
+@tool
+def web_search(query: str) -> str:
+    """Search the web for current information using Google Search.
+    Use this for any question requiring up-to-date information not available in uploaded documents.
+    query: search query in any language
+    Returns top search results with title, snippet, and link.
+    """
+    client = serpapi.Client(api_key=os.getenv("SERPAPI_KEY"))
+    try:
+        raw = client.search({"engine": "google", "q": query, "num": 5})
+    except serpapi.exceptions.HTTPError as e:
+        logger.warning("web_search: SerpAPI error for '%s': %s", query, e)
+        return f"Web search unavailable: {e}"
+    results = raw.get("organic_results", [])
+    if not results:
+        return "No results found."
+    lines = []
+    for r in results[:5]:
+        lines.append(f"**{r.get('title', '')}**\n{r.get('snippet', '')}\n{r.get('link', '')}")
+    return "\n\n".join(lines)
+
+
+@tool
+def generate_presentation(title: str, slides_json: str) -> str:
+    """Create a PowerPoint presentation (.pptx) file and return a download link.
+    Use this when the user asks to create a presentation or slideshow.
+    title: presentation title
+    slides_json: JSON array of slides, e.g.:
+                 '[{"title": "Introduction", "content": "Point 1\\nPoint 2\\nPoint 3"}]'
+                 Each slide must have a 'title' and 'content' (newline-separated bullet points).
+    Returns a download URL for the generated .pptx file.
+    """
+    from pptx import Presentation
+
+    try:
+        slides_data = json.loads(slides_json)
+    except json.JSONDecodeError as e:
+        return f"Invalid slides_json: {e}. Expected JSON array like [{{\"title\": \"...\", \"content\": \"...\"}}]"
+
+    prs = Presentation()
+
+    title_slide = prs.slides.add_slide(prs.slide_layouts[0])
+    title_slide.shapes.title.text = title
+    if len(title_slide.placeholders) > 1:
+        title_slide.placeholders[1].text = ""
+
+    for slide_data in slides_data:
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = slide_data.get("title", "")
+        tf = slide.placeholders[1].text_frame
+        tf.clear()
+        bullet_lines = [l.strip() for l in slide_data.get("content", "").split("\n") if l.strip()]
+        for i, line in enumerate(bullet_lines):
+            if i == 0:
+                tf.paragraphs[0].text = line
+            else:
+                tf.add_paragraph().text = line
+
+    _ensure_generated_dir()
+    filename = f"{uuid.uuid4().hex}.pptx"
+    prs.save(os.path.join(_GENERATED_FILES_DIR, filename))
+    logger.info("generate_presentation: created %s", filename)
+    return f"Presentation created successfully.\n\n[Download {title}.pptx]({_API_BASE_URL}/files/{filename})"
+
+
+@tool
+def generate_word_document(title: str, content: str) -> str:
+    """Create a Word document (.docx) file and return a download link.
+    Use this when the user asks to create a Word document, report, summary, checklist, or price list as a file.
+    title: document title (used as the main heading)
+    content: document body. Supports markdown-like formatting:
+             - Lines starting with # / ## / ### are headings (level 1/2/3)
+             - Lines starting with - or * are bullet list items
+             - Lines with | delimiters are table rows (consecutive | rows become one table)
+             - All other lines are normal paragraphs
+    Returns a download URL for the generated .docx file.
+    """
+    from docx import Document
+
+    doc = Document()
+    doc.add_heading(title, level=0)
+
+    lines = content.split("\n")
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+
+        if stripped.startswith("|"):
+            table_rows = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                row = lines[i].strip()
+                if not all(c in "-| :" for c in row):
+                    table_rows.append([c.strip() for c in row.strip("|").split("|")])
+                i += 1
+            if table_rows:
+                max_cols = max(len(r) for r in table_rows)
+                tbl = doc.add_table(rows=len(table_rows), cols=max_cols)
+                tbl.style = "Table Grid"
+                for r_idx, cells in enumerate(table_rows):
+                    for c_idx, text in enumerate(cells):
+                        if c_idx < max_cols:
+                            tbl.rows[r_idx].cells[c_idx].text = text
             continue
-        stops = len(legs) - 1
-        layover_names = [l.get("name", "") for l in group.get("layovers", [])]
-        baggage_keywords = ("bag", "kg", "lb", "luggage", "allowance")
-        extensions = group.get("extensions", [])
-        baggage = [e for e in extensions if any(kw in e.lower() for kw in baggage_keywords)]
-        for leg in legs:
-            for e in leg.get("extensions", []):
-                if any(kw in e.lower() for kw in baggage_keywords) and e not in baggage:
-                    baggage.append(e)
-        first, last = legs[0], legs[-1]
-        all_flights.append({
-            "airline": first.get("airline"),
-            "flight_number": first.get("flight_number"),
-            "departure": first.get("departure_airport", {}).get("time"),
-            "arrival": last.get("arrival_airport", {}).get("time"),
-            "duration_min": group.get("total_duration"),
-            "stops": stops,
-            "layovers": layover_names,
-            "price_usd": group.get("price"),
-            "baggage": baggage,
-        })
-    return all_flights
 
+        if not stripped:
+            i += 1
+            continue
 
-def _get_image_url(images):
-    if not images:
-        return None
-    url = images[0].get("thumbnail") or images[0].get("original_image")
-    return url if url and url.startswith("https://") else None
+        if stripped.startswith("### "):
+            doc.add_heading(stripped[4:], level=3)
+        elif stripped.startswith("## "):
+            doc.add_heading(stripped[3:], level=2)
+        elif stripped.startswith("# "):
+            doc.add_heading(stripped[2:], level=1)
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            doc.add_paragraph(stripped[2:], style="List Bullet")
+        else:
+            doc.add_paragraph(stripped)
+        i += 1
 
-
-def _extract_hotels(raw):
-    hotels = []
-    for prop in raw.get("properties", []):
-        rate = prop.get("rate_per_night", {})
-        images = prop.get("images", [])
-        hotel = {
-            "name": prop.get("name"),
-            "type": prop.get("type"),
-            "location": prop.get("neighborhood") or prop.get("address"),
-            "price_per_night": rate.get("lowest"),
-            "free_cancellation_until": prop.get("free_cancellation_until"),
-            "check_in_time": prop.get("check_in_time"),
-            "check_out_time": prop.get("check_out_time"),
-            "amenities": prop.get("amenities", []),
-            "nearby_places": [p.get("name") for p in prop.get("nearby_places", [])],
-        }
-        image_url = _get_image_url(images)
-        if image_url:
-            hotel["image"] = image_url
-        hotels.append(hotel)
-    return hotels
+    _ensure_generated_dir()
+    filename = f"{uuid.uuid4().hex}.docx"
+    doc.save(os.path.join(_GENERATED_FILES_DIR, filename))
+    logger.info("generate_word_document: created %s", filename)
+    return f"Word document created successfully.\n\n[Download {title}.docx]({_API_BASE_URL}/files/{filename})"
 
 
 @tool
-def search_hotels(location: str, check_in_date: str, check_out_date: str = "") -> list:
-    """Search for real-time hotel data using Google Hotels. Use this tool for ANY hotel availability, price, or recommendation question.
-    location: city or area name (e.g. 'Madrid', 'Paris city center')
-    check_in_date: check-in date in YYYY-MM-DD format (e.g. '2026-05-27')
-    check_out_date: check-out date in YYYY-MM-DD format. If not provided, defaults to the next day.
-    Always convert dates to YYYY-MM-DD format before calling this tool.
-    Returns name, type, location, price per night, free cancellation info, amenities, nearby places and image.
+def generate_pdf_document(title: str, content: str) -> str:
+    """Create a PDF document and return a download link.
+    Use this when the user asks to create a PDF report, price list, or summary as a file.
+    title: document title
+    content: document body. Supports:
+             - Lines starting with # / ## / ### for headings
+             - Lines starting with - or * for bullet points
+             - Blank lines for paragraph spacing
+    Returns a download URL for the generated .pdf file.
     """
-    from datetime import datetime, timedelta
-    if not check_out_date:
-        check_out_date = (datetime.strptime(check_in_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
-    check_in_dt  = datetime.strptime(check_in_date,  "%Y-%m-%d")
-    check_out_dt = datetime.strptime(check_out_date, "%Y-%m-%d")
-    if (check_out_dt - check_in_dt).days > 7:
-        return "Hotel stay exceeds 7 days. Please limit hotel searches to a maximum of 7 nights."
-    client = serpapi.Client(api_key=os.getenv("SERPAPI_KEY"))
-    try:
-        raw = client.search({
-            "engine": "google_hotels",
-            "q": f"Hotels in {location}",
-            "check_in_date": check_in_date,
-            "check_out_date": check_out_date,
-            "hl": "en",
-            "currency": "EUR",
-        })
-    except serpapi.exceptions.HTTPError as e:
-        logger.warning("search_hotels: SerpAPI error for %s: %s", location, e)
-        return f"Hotel search unavailable: {e}"
-    hotels = _extract_hotels(raw)
-    return hotels if hotels else "No hotels found for this location and dates."
+    from fpdf import FPDF
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.multi_cell(0, 10, title, align="C")
+    pdf.ln(6)
+    pdf.set_font("Helvetica", "", 11)
+
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            pdf.ln(3)
+        elif stripped.startswith("### "):
+            pdf.set_font("Helvetica", "B", 12)
+            pdf.multi_cell(0, 7, stripped[4:])
+            pdf.set_font("Helvetica", "", 11)
+        elif stripped.startswith("## "):
+            pdf.set_font("Helvetica", "B", 13)
+            pdf.multi_cell(0, 8, stripped[3:])
+            pdf.set_font("Helvetica", "", 11)
+        elif stripped.startswith("# "):
+            pdf.set_font("Helvetica", "B", 14)
+            pdf.multi_cell(0, 9, stripped[2:])
+            pdf.set_font("Helvetica", "", 11)
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            pdf.multi_cell(0, 7, f"  - {stripped[2:]}")
+        else:
+            pdf.multi_cell(0, 7, stripped)
+
+    _ensure_generated_dir()
+    filename = f"{uuid.uuid4().hex}.pdf"
+    pdf.output(os.path.join(_GENERATED_FILES_DIR, filename))
+    logger.info("generate_pdf_document: created %s", filename)
+    return f"PDF document created successfully.\n\n[Download {title}.pdf]({_API_BASE_URL}/files/{filename})"
 
 
-@tool
-def search_flights(departure_id: str, arrival_id: str, outbound_date: str) -> list:
-    """Search for real-time one-way flight data using Google Flights. Use this tool for ANY flight availability or price question.
-    departure_id: IATA airport code (e.g. 'MUC' for Munich)
-    arrival_id: IATA airport code (e.g. 'MAD' for Madrid)
-    outbound_date: date in YYYY-MM-DD format (e.g. '2026-05-23')
-    Returns a list of flights with airline, times, stops, price and baggage info.
-    """
-    client = serpapi.Client(api_key=os.getenv("SERPAPI_KEY"))
-    try:
-        raw = client.search({
-            "engine": "google_flights",
-            "departure_id": departure_id,
-            "arrival_id": arrival_id,
-            "outbound_date": outbound_date,
-            "type": "2",
-        })
-    except serpapi.exceptions.HTTPError as e:
-        logger.warning("search_flights: SerpAPI error for %s→%s on %s: %s", departure_id, arrival_id, outbound_date, e)
-        return f"Flight search unavailable: {e}"
-    flights = _extract_flights(raw)
-    return flights if flights else "No flights found for this route and date."
-
-
-@tool
-def search_weather(city: str, date: str) -> dict:
-    """Search for weather forecast using WeatherAPI. Use this tool for ANY weather, temperature, rain, or wind question.
-    city: city name (e.g. 'Madrid', 'Munich')
-    date: date in YYYY-MM-DD format (e.g. '2026-05-27'). Must be within 14 days from today.
-    Returns temperature (min/max/avg in Celsius), precipitation chance, total rain in mm, and max wind speed.
-    """
-    import requests
-    url = "http://api.weatherapi.com/v1/forecast.json"
-    params = {"q": city, "dt": date, "days": 1}
-    headers = {"key": os.getenv("WEATHER_API_KEY")}
-    raw = requests.get(url, params=params, headers=headers).json()
-    forecastdays = raw.get("forecast", {}).get("forecastday", [])
-    if not forecastdays:
-        logger.warning("search_weather: no forecast data for %s on %s", city, date)
-        return {}
-    day = forecastdays[0]["day"]
-    return {
-        "city": raw["location"]["name"],
-        "date": date,
-        "temp_min_c": day["mintemp_c"],
-        "temp_max_c": day["maxtemp_c"],
-        "temp_avg_c": day["avgtemp_c"],
-        "rain_mm": day["totalprecip_mm"],
-        "rain_chance_pct": day["daily_chance_of_rain"],
-        "max_wind_kph": day["maxwind_kph"],
-        "condition": day["condition"]["text"],
-    }
-
-
-@tool
-def optimize_itinerary(
-    candidate_cities: str,
-    city_iata_pairs: str,
-    origin_city: str,
-    origin_iata: str,
-    num_to_visit: int,
-    start_date: str,
-    end_date: str,
-    min_nights: int = 2,
-    max_nights: int = 5,
-    min_temp_c: float = -999.0,
-    max_rain_pct: float = 100.0,
-    max_trip_budget_eur: float = 5000.0,
-    max_hotel_per_night_eur: float = 200.0,
-) -> str:
-    """Find the cheapest multi-city vacation itinerary using CP-SAT optimization.
-    Use this when the user wants to plan a multi-city trip, find the cheapest route
-    between several cities, or optimize a vacation itinerary within a date window.
-    candidate_cities: comma-separated city names to consider, e.g. 'Madrid,Lisbon,Barcelona,Rome'
-    city_iata_pairs: comma-separated City:IATA pairs, e.g. 'Madrid:MAD,Lisbon:LIS,Barcelona:BCN,Rome:FCO'
-    origin_city: home city name, e.g. 'Munich'
-    origin_iata: home city IATA airport code, e.g. 'MUC'
-    num_to_visit: how many cities to select and visit from the candidates
-    start_date: earliest departure date in YYYY-MM-DD format
-    end_date: latest return date in YYYY-MM-DD format
-    min_nights: minimum nights per city (default 2)
-    max_nights: maximum nights per city (default 5)
-    min_temp_c: minimum acceptable average temperature in Celsius (default: no constraint)
-    max_rain_pct: maximum acceptable rain chance in % 0-100 (default: no constraint)
-    max_trip_budget_eur: total flight cost ceiling in EUR from corporate travel policy (default 5000.0)
-    max_hotel_per_night_eur: hotel nightly rate ceiling in EUR from corporate travel policy (default 200.0)
-    Returns the optimal city order, per-leg flight details, and total cost.
-    """
-    from datetime import date as _date, timedelta
-    from itinerary_optimizer import (
-        optimize_itinerary as _optimize,
-        WeatherConstraints,
-        PolicyConstraints,
-    )
-
-    try:
-        cities = [c.strip() for c in candidate_cities.split(",")]
-        iata = dict(p.strip().split(":") for p in city_iata_pairs.split(","))
-        start_date_obj = _date.fromisoformat(start_date)
-        end_date_obj   = _date.fromisoformat(end_date)
-        if (end_date_obj - start_date_obj).days > 7:
-            return (
-                "Trip duration exceeds 7 days. "
-                "Please limit your trip window to a maximum of 7 days to control API costs."
-            )
-    except Exception as e:
-        logger.error("optimize_itinerary: parameter parsing failed — %s", e, exc_info=True)
-        return (
-            f"Parameter error: {e}. "
-            "Expected format — cities: 'City1,City2', "
-            "iata: 'City1:IATA1,City2:IATA2', dates: YYYY-MM-DD."
-        )
-
-    result, stats = _optimize(
-        candidate_cities=cities,
-        city_iata=iata,
-        origin_city=origin_city,
-        origin_iata=origin_iata,
-        num_to_visit=num_to_visit,
-        start_date=start_date_obj,
-        end_date=end_date_obj,
-        min_nights=min_nights,
-        max_nights=max_nights,
-        weather_constraints=WeatherConstraints(
-            min_temp_c=min_temp_c,
-            max_rain_pct=max_rain_pct,
-        ),
-        policy_constraints=PolicyConstraints(
-            max_trip_budget_eur=max_trip_budget_eur,
-            max_hotel_per_night_eur=max_hotel_per_night_eur,
-        ),
-    )
-
-    combo_str = f"{stats['combinations']:,}"
-    stats_note = (
-        f"searched {stats['routes_searched']} routes, "
-        f"{stats['total_flight_options']} flights, "
-        f"{stats['weather_records']} weather records"
-    )
-
-    if result is None:
-        return (
-            f"From {combo_str} possible combinations ({stats_note}), "
-            f"no itinerary satisfied all constraints."
-        )
-
-    base = _date.fromisoformat(start_date)
-    lines = [
-        f"From {combo_str} possible combinations ({stats_note}), the cheapest feasible itinerary:",
-        "",
-        f"Route: {' → '.join([origin_city] + result.city_order + [origin_city])}",
-        f"Total flight cost: ${result.total_cost_usd:.2f}",
-        "",
-    ]
-    for i, leg in enumerate(result.legs):
-        dep = (base + timedelta(days=leg.date_offset)).strftime("%Y-%m-%d")
-        fl = leg.flight
-        dest = result.city_order[i] if i < len(result.city_order) else origin_city
-        nights_str = f" — stay {result.nights_per_city[i]} nights" if i < len(result.nights_per_city) else ""
-        lines.append(
-            f"  {dep}  → {dest}  {fl.get('airline', '')} {fl.get('flight_number', '')}  "
-            f"${fl.get('price_usd', 0):.2f}{nights_str}"
-        )
-    return "\n".join(lines)
-
-
-def make_policy_tool(retriever):
+def make_document_search_tool(retriever):
     @tool
-    def search_company_policy(query: str) -> str:
-        """Search the corporate travel policy document for rules, limits, and guidelines.
-        Use this when the user asks about expense limits, hotel budgets, flight class rules,
-        booking procedures, per diem rates, or any company travel policy question.
+    def search_documents(query: str) -> str:
+        """Search uploaded company documents for information, policies, procedures, and guidelines.
+        Use this for ANY question about content in uploaded documents — product details, pricing,
+        procedures, company policies, project information, or any other document content.
+        Always search documents before answering questions about company-specific information.
         """
         docs = retriever.invoke(query)
-        return "\n\n".join(d.page_content for d in docs) if docs else "No relevant policy found."
-    return search_company_policy
+        return "\n\n".join(d.page_content for d in docs) if docs else "No relevant information found in uploaded documents."
+    return search_documents
 
 
 class Tools:
-    tools = [search_flights, search_hotels, search_weather, optimize_itinerary]
+    tools = [web_search, generate_presentation, generate_word_document, generate_pdf_document]

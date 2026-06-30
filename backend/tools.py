@@ -17,6 +17,31 @@ def _ensure_generated_dir():
     os.makedirs(_GENERATED_FILES_DIR, exist_ok=True)
 
 
+def _file_size_str(path: str) -> str:
+    try:
+        b = os.path.getsize(path)
+    except OSError:
+        return "?"
+    if b < 1_048_576:
+        return f"{b / 1024:.1f} KB"
+    return f"{b / 1_048_576:.1f} MB"
+
+
+def _build_file_select_block(paths: list) -> str:
+    """Returns a ```file-select JSON block for PDF files (max 10), or empty string."""
+    pdf_paths = [p for p in paths if p.lower().endswith(".pdf")][:10]
+    if not pdf_paths:
+        return ""
+    items = []
+    for p in pdf_paths:
+        try:
+            size = os.path.getsize(p)
+        except OSError:
+            size = 0
+        items.append({"path": p, "name": os.path.basename(p), "size_bytes": size})
+    return "\n\n```file-select\n" + json.dumps(items, ensure_ascii=False) + "\n```"
+
+
 @tool
 def web_search(query: str) -> str:
     """Search the web for current information using Google Search.
@@ -194,6 +219,164 @@ def generate_pdf_document(title: str, content: str) -> str:
     return f"PDF document created successfully.\n\n[Download {title}.pdf]({_API_BASE_URL}/files/{filename})"
 
 
+@tool
+def search_project_files(project_name: str, query: str) -> str:
+    """Find a project folder by name on disk and search its file contents for a keyword.
+    Use this when the user asks to find files in a project, search code or content within a project directory,
+    or wants to know what files exist in a named project.
+    project_name: name of the project folder (searched under the PROJECTS_DIR environment variable)
+    query: keyword or text to search for inside files
+    Returns the file listing and content matches with file path and line number.
+    """
+    projects_dir = os.getenv("PROJECTS_DIR")
+    if not projects_dir:
+        return "PROJECTS_DIR environment variable is not set. Cannot search project files."
+
+    exact_match = None
+    partial_matches = []
+    try:
+        for entry in os.scandir(projects_dir):
+            if not entry.is_dir():
+                continue
+            if entry.name.lower() == project_name.lower():
+                exact_match = entry.path
+                break
+            if project_name.lower() in entry.name.lower():
+                partial_matches.append(entry.path)
+    except PermissionError as e:
+        return f"Permission denied accessing {projects_dir}: {e}"
+
+    if exact_match:
+        project_paths = [exact_match]
+    elif partial_matches:
+        project_paths = partial_matches
+    else:
+        return f"No folder named or containing '{project_name}' found under {projects_dir}."
+
+    abs_projects = os.path.abspath(projects_dir)
+    project_paths = [
+        p for p in project_paths
+        if os.path.abspath(p).startswith(abs_projects)
+    ]
+    if not project_paths:
+        return "Access denied: resolved paths are outside PROJECTS_DIR."
+
+    result = []
+    total_matches = 0
+    all_abs_paths = []
+
+    for project_path in project_paths:
+        folder_name = os.path.basename(project_path)
+        file_list = []
+        abs_paths = []
+        matches = []
+
+        for root, dirs, files in os.walk(project_path):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            for fname in files:
+                fpath = os.path.join(root, fname)
+                rel_path = os.path.relpath(fpath, project_path)
+                file_list.append((rel_path, fpath))
+                abs_paths.append(fpath)
+                if total_matches < 20:
+                    try:
+                        with open(fpath, encoding="utf-8", errors="ignore") as f:
+                            for lineno, line in enumerate(f, 1):
+                                if query.lower() in line.lower():
+                                    matches.append(f"{rel_path}:{lineno}: {line.rstrip()}")
+                                    total_matches += 1
+                                    if total_matches >= 20:
+                                        break
+                    except OSError as e:
+                        logger.debug("search_project_files: skipping %s: %s", fpath, e)
+
+        all_abs_paths.extend(abs_paths)
+        result.append(f"=== {folder_name} ({project_path}) ===")
+        result.append(f"Files ({len(file_list)} total):")
+        for rel, fpath in file_list[:50]:
+            result.append(f"  {rel} ({_file_size_str(fpath)})")
+        if len(file_list) > 50:
+            result.append(f"  ... and {len(file_list) - 50} more files")
+        if matches:
+            result.append(f"Matches for '{query}':")
+            result.extend(f"  {m}" for m in matches)
+        else:
+            result.append(f"No matches for '{query}'.")
+        result.append("")
+
+    if total_matches >= 20:
+        result.append("(Results truncated at 20 total matches)")
+
+    return "\n".join(result) + _build_file_select_block(all_abs_paths)
+
+
+@tool
+def find_files_by_name_exact(filename: str) -> str:
+    """Find files whose name exactly matches the given filename (case-insensitive) across PROJECTS_DIR.
+    Use this when the user knows the exact file name and wants to locate it on disk.
+    filename: exact file name to search for, e.g. 'report.pdf', 'config.py'
+    Returns a list of full file paths where the exact match was found.
+    """
+    projects_dir = os.getenv("PROJECTS_DIR")
+    if not projects_dir:
+        return "PROJECTS_DIR environment variable is not set."
+
+    found = []
+    for root, dirs, files in os.walk(projects_dir):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for fname in files:
+            if fname.lower() == filename.lower():
+                found.append(os.path.join(root, fname))
+                if len(found) >= 20:
+                    break
+        if len(found) >= 20:
+            break
+
+    if not found:
+        return f"No file named '{filename}' found under {projects_dir}."
+
+    result = [f"Exact matches for '{filename}' ({len(found)}):"]
+    for f in found:
+        result.append(f"  {f} ({_file_size_str(f)})")
+    if len(found) >= 20:
+        result.append("  ... (truncated at 20 results)")
+    return "\n".join(result) + _build_file_select_block(found)
+
+
+@tool
+def find_files_by_name_contains(keyword: str) -> str:
+    """Find files whose name contains the given keyword (case-insensitive) across PROJECTS_DIR.
+    Use this when the user wants to list all files that have a word or phrase in their filename.
+    keyword: word or phrase to look for inside file names, e.g. 'blockchain', 'report', '2024'
+    Returns a list of full file paths whose names contain the keyword.
+    """
+    projects_dir = os.getenv("PROJECTS_DIR")
+    if not projects_dir:
+        return "PROJECTS_DIR environment variable is not set."
+
+    found = []
+    for root, dirs, files in os.walk(projects_dir):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for fname in files:
+            if keyword.lower() in fname.lower():
+                found.append(os.path.join(root, fname))
+                if len(found) >= 30:
+                    break
+        if len(found) >= 30:
+            break
+
+    if not found:
+        return f"No files with '{keyword}' in their name found under {projects_dir}."
+
+    result = [f"Files with '{keyword}' in name ({len(found)}):"]
+    for f in found:
+        result.append(f"  {f} ({_file_size_str(f)})")
+    if len(found) >= 30:
+        result.append("  ... (truncated at 30 results)")
+    return "\n".join(result) + _build_file_select_block(found)
+
+
+
 def make_document_search_tool(retriever):
     @tool
     def search_documents(query: str) -> str:
@@ -208,4 +391,4 @@ def make_document_search_tool(retriever):
 
 
 class Tools:
-    tools = [web_search, generate_presentation, generate_word_document, generate_pdf_document]
+    tools = [web_search, generate_presentation, generate_word_document, generate_pdf_document, search_project_files, find_files_by_name_exact, find_files_by_name_contains]

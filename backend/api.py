@@ -19,6 +19,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+from typing import List
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from chatbot import ChatbotManager
@@ -56,6 +57,9 @@ class RenameSessionRequest(BaseModel):
 class EvaluateRequest(BaseModel):
     filename: str
     num_questions: int = 20
+
+class IngestPathsRequest(BaseModel):
+    paths: List[str]
 
 @app.post("/sessions/create")
 def create_session(request: CreateSessionRequest):
@@ -175,6 +179,73 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         except Exception as e:
             logger.error("upload_document failed for %s", file.filename, exc_info=True)
             yield f"data: {json.dumps({'stage': 'Error', 'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/documents/ingest-paths")
+async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
+    projects_dir = os.getenv("PROJECTS_DIR", "")
+    if not projects_dir:
+        raise HTTPException(status_code=400, detail="PROJECTS_DIR is not configured on the server.")
+
+    abs_projects = os.path.abspath(projects_dir)
+
+    valid_paths = []
+    errors = []
+    for p in body.paths:
+        abs_p = os.path.abspath(p)
+        if not (abs_p == abs_projects or abs_p.startswith(abs_projects + os.sep)):
+            errors.append(f"Access denied: {p}")
+            continue
+        if not p.lower().endswith(".pdf"):
+            errors.append(f"Not a PDF: {p}")
+            continue
+        if not os.path.isfile(abs_p):
+            errors.append(f"File not found: {p}")
+            continue
+        valid_paths.append(abs_p)
+
+    if not valid_paths:
+        raise HTTPException(status_code=400, detail=f"No valid PDF paths. {'; '.join(errors)}")
+
+    async def event_stream():
+        total = len(valid_paths)
+        for idx, src_path in enumerate(valid_paths):
+            fname = os.path.basename(src_path)
+            dest_path = os.path.join(_DOCUMENTS_DIR, fname)
+            cancel_event = threading.Event()
+            try:
+                yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                shutil.copy2(src_path, dest_path)
+
+                yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                add_task = asyncio.create_task(
+                    asyncio.to_thread(add_document, dest_path, cancel_event=cancel_event)
+                )
+                while not add_task.done():
+                    await asyncio.sleep(0.5)
+                    if await request.is_disconnected():
+                        cancel_event.set()
+                        add_task.cancel()
+                        if os.path.exists(dest_path):
+                            os.remove(dest_path)
+                        logger.info("ingest-paths cancelled by client: %s", fname)
+                        return
+
+                chunk_count = add_task.result()
+                if cancel_event.is_set() or chunk_count == 0:
+                    return
+
+                yield f"data: {json.dumps({'stage': 'Refreshing index...', 'progress': 85, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                await asyncio.to_thread(chatbot.reload_vectorstore)
+                yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'chunks': chunk_count, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                logger.info("Ingested from path %s (%d chunks)", fname, chunk_count)
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logger.error("ingest_paths failed for %s", src_path, exc_info=True)
+                yield f"data: {json.dumps({'stage': 'Error', 'error': str(e), 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

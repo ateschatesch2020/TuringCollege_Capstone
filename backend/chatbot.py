@@ -106,6 +106,10 @@ class ChatbotManager:
         - When the user requests a presentation, Word document, or PDF file, use the appropriate generation tool and include the download link in your response.
         - For checklists, comparison tables, or price lists shown in chat, generate them as formatted markdown — no file tool needed unless the user asks for a downloadable file.
         - NEVER invent document content. Only use what search_documents returns.
+        - File system search tools (each does one thing — use whichever fits, or multiple if needed):
+          · find_files_by_name_exact: use when the user knows the exact file name (e.g. "report.pdf exists?")
+          · find_files_by_name_contains: use when the user wants files whose NAME contains a word (e.g. "files with 'blockchain' in name")
+          · search_project_files: use when the user names a specific project folder and wants its file listing and content search
         - Reply in the user's language.
         """
 
@@ -336,6 +340,7 @@ class ChatbotManager:
         NEVER invent document content — only use what search_documents returns.
         Reply in the user's language.
         The current date and time is {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        If a tool returns output that contains a ```file-select code block, include that block verbatim in your response without any modification, so the user can select files for upload to the knowledge base.
 
         This is the success criteria:
         {state["success_criteria"]}

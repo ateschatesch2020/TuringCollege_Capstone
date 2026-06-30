@@ -188,6 +188,7 @@ class ChatBot {
         this.scrollToBottom();
       }
       contentDiv.innerHTML = this.renderContent(fullText);
+      this.initFileSelectWidgets(contentDiv);
       await this.updateTokenUsage();
     } catch (err) {
       if (err.name === "AbortError") {
@@ -344,11 +345,156 @@ class ChatBot {
       `<div class="max-w-[85%] md:max-w-[75%] min-w-0"><div class="message-content text-[15px] leading-relaxed py-3.5 px-5 break-text ${bubbleStyle}">${isUser ? this.escapeHtml(text) : this.renderContent(text)}</div></div>`;
 
     container.appendChild(div);
+    if (!isUser) {
+      const msgContent = div.querySelector(".message-content");
+      if (msgContent) this.initFileSelectWidgets(msgContent);
+    }
     return div;
   }
 
   renderContent(text) {
     return marked.parse(text, { breaks: true });
+  }
+
+  initFileSelectWidgets(container) {
+    container.querySelectorAll("code.language-file-select").forEach(codeEl => {
+      const pre = codeEl.parentElement;
+      if (!pre || pre.tagName !== "PRE") return;
+
+      let files;
+      try { files = JSON.parse(codeEl.textContent); } catch { return; }
+      if (!Array.isArray(files) || files.length === 0) return;
+
+      const widget = document.createElement("div");
+      widget.className = "border border-blue-200 rounded-xl p-3 mt-2 mb-1 bg-blue-50 text-sm";
+
+      const itemsHtml = files.map(f => {
+        const sizeStr = this.formatFileSize(f.size_bytes);
+        const estSec = Math.max(15, Math.round((f.size_bytes || 0) / 20000));
+        const estStr = estSec < 60 ? `~${estSec}s` : `~${Math.round(estSec / 60)}m`;
+        const isPdf = f.name.toLowerCase().endsWith(".pdf");
+        const disabledAttr = isPdf ? "" : 'disabled title="Only PDF files can be uploaded"';
+        const dimClass = isPdf ? "" : "opacity-40";
+        return `<label class="flex items-center gap-2 py-1 px-1 rounded hover:bg-blue-100 cursor-pointer ${dimClass}">
+          <input type="checkbox" class="file-select-cb" data-path="${this.escapeAttr(f.path)}" ${disabledAttr} />
+          <i class="fa-solid fa-file-pdf text-red-400 text-xs flex-shrink-0"></i>
+          <span class="text-xs text-gray-700 truncate flex-1">${this.escapeHtml(f.name)}</span>
+          <span class="text-xs text-gray-400 flex-shrink-0 ml-2">${sizeStr} · ${estStr}</span>
+        </label>`;
+      }).join("");
+
+      widget.innerHTML = `
+        <div class="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1">
+          <i class="fa-solid fa-file-arrow-up"></i> Bilgi tabanına eklemek için dosya seçin
+        </div>
+        <div class="space-y-0.5">${itemsHtml}</div>
+        <div class="mt-2 flex items-center gap-2">
+          <button class="file-select-upload-btn bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors" disabled>
+            <i class="fa-solid fa-upload mr-1"></i> Seçilenleri Yükle
+          </button>
+          <span class="file-select-status text-xs text-gray-400"></span>
+        </div>`;
+
+      pre.replaceWith(widget);
+
+      const uploadBtn = widget.querySelector(".file-select-upload-btn");
+      widget.querySelectorAll(".file-select-cb").forEach(cb => {
+        cb.addEventListener("change", () => {
+          uploadBtn.disabled = widget.querySelectorAll(".file-select-cb:checked").length === 0;
+        });
+      });
+
+      uploadBtn.addEventListener("click", () => {
+        const paths = [...widget.querySelectorAll(".file-select-cb:checked")].map(cb => cb.dataset.path);
+        this.ingestPaths(paths, widget);
+      });
+    });
+  }
+
+  async ingestPaths(paths, widgetEl) {
+    const uploadBtn = widgetEl?.querySelector(".file-select-upload-btn");
+    const statusEl = widgetEl?.querySelector(".file-select-status");
+    const progressContainer = document.getElementById("uploadProgress");
+    const stageLabel = document.getElementById("uploadStageName");
+    const progressBar = document.getElementById("uploadProgressBar");
+    const cancelBtn = document.getElementById("cancelUploadBtn");
+    const sidebarBtn = document.getElementById("uploadDocBtn");
+
+    this.uploadAbortController = new AbortController();
+    const { signal } = this.uploadAbortController;
+
+    if (uploadBtn) uploadBtn.disabled = true;
+    if (sidebarBtn) sidebarBtn.disabled = true;
+    if (cancelBtn) cancelBtn.classList.remove("hidden");
+    if (progressContainer) progressContainer.classList.remove("hidden");
+
+    const setStage = (stage, pct) => {
+      if (stageLabel) stageLabel.textContent = stage;
+      if (progressBar) progressBar.style.width = pct + "%";
+      if (statusEl) statusEl.textContent = stage;
+    };
+
+    try {
+      const res = await fetch(`${this.API_URL}/documents/ingest-paths`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paths }),
+        signal,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (statusEl) statusEl.textContent = `Hata: ${err.detail}`;
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop();
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) continue;
+          let evt;
+          try { evt = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          if (evt.error) { setStage(`Hata: ${evt.error}`, 0); return; }
+          const label = evt.total_files > 1
+            ? `[${evt.file_index + 1}/${evt.total_files}] ${evt.stage}`
+            : evt.stage;
+          setStage(label, evt.progress ?? 0);
+          if (evt.stage === "Complete") await this.loadDocuments();
+        }
+      }
+    } catch (e) {
+      if (e.name === "AbortError") {
+        setStage("İptal edildi", 0);
+      } else {
+        if (statusEl) statusEl.textContent = "Yükleme başarısız.";
+        console.error(e);
+      }
+    } finally {
+      this.uploadAbortController = null;
+      if (sidebarBtn) sidebarBtn.disabled = false;
+      if (uploadBtn) uploadBtn.disabled = false;
+      if (cancelBtn) cancelBtn.classList.add("hidden");
+      setTimeout(() => {
+        if (progressContainer) progressContainer.classList.add("hidden");
+        if (progressBar) progressBar.style.width = "0%";
+      }, 1500);
+    }
+  }
+
+  formatFileSize(bytes) {
+    if (!bytes) return "?";
+    if (bytes < 1_048_576) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  }
+
+  escapeAttr(str) {
+    return String(str).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   escapeHtml(text) {

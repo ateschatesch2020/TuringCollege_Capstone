@@ -56,8 +56,10 @@ class ChatBot {
       }
     });
     if (documentList) documentList.addEventListener("click", (e) => {
-      const btn = e.target.closest(".delete-doc-btn");
-      if (btn) this.deleteDocument(btn.dataset.filename);
+      const delBtn = e.target.closest(".delete-doc-btn");
+      if (delBtn) this.deleteDocument(delBtn.dataset.filename);
+      const evalBtn = e.target.closest(".eval-doc-btn");
+      if (evalBtn) window.open(`evaluation.html?file=${encodeURIComponent(evalBtn.dataset.filename)}`, "_blank");
     });
 
     //load all sessions on the left side of page
@@ -386,9 +388,14 @@ class ChatBot {
       list.innerHTML = documents.map(name => `
         <div class="flex items-center justify-between text-xs text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-50 group">
           <span class="truncate"><i class="fa-solid fa-file-pdf text-red-400 mr-1.5"></i>${this.escapeHtml(name)}</span>
-          <button class="delete-doc-btn flex-shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all ml-1" data-filename="${this.escapeHtml(name)}" title="Delete">
-            <i class="fa-solid fa-trash text-xs"></i>
-          </button>
+          <div class="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all ml-1">
+            <button class="eval-doc-btn text-gray-400 hover:text-indigo-500 transition-colors" data-filename="${this.escapeHtml(name)}" title="Evaluate">
+              <i class="fa-solid fa-chart-bar text-xs"></i>
+            </button>
+            <button class="delete-doc-btn text-gray-400 hover:text-red-500 transition-colors" data-filename="${this.escapeHtml(name)}" title="Delete">
+              <i class="fa-solid fa-trash text-xs"></i>
+            </button>
+          </div>
         </div>`).join("");
     } catch (e) {
       list.innerHTML = '<p class="text-xs text-red-400 px-2">Backend unavailable.</p>';

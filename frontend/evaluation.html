@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAGAs Evaluation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body class="bg-gray-50 min-h-screen p-6">
+  <div class="max-w-7xl mx-auto">
+
+    <!-- Header -->
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+        <i class="fa-solid fa-chart-bar text-indigo-500"></i>
+        RAGAs Evaluation
+      </h1>
+      <p id="fileLabel" class="text-sm text-gray-500 mt-1"></p>
+    </div>
+
+    <!-- Config -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
+      <div class="flex flex-wrap items-end gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Number of test questions</label>
+          <input id="numQuestions" type="number" min="1" max="50" value="20"
+            class="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        </div>
+        <button id="runBtn"
+          class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
+          <i class="fa-solid fa-play"></i> Run Evaluation
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div id="progressSection" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
+      <p id="stageName" class="text-sm text-gray-600 mb-2">Starting...</p>
+      <div class="w-full bg-gray-200 rounded-full h-2">
+        <div id="progressBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="resultsSection" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold text-gray-700">Results</h2>
+        <div class="flex items-center gap-4 text-xs text-gray-500">
+          <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#d1fae5"></span> ≥ 0.75</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#fef9c3"></span> 0.35 – 0.75</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#fee2e2"></span> &lt; 0.35</span>
+        </div>
+      </div>
+      <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200">
+        <table class="min-w-full text-xs text-gray-700 bg-white">
+          <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+            <tr>
+              <th class="px-4 py-3 text-left w-8">#</th>
+              <th class="px-4 py-3 text-left">Question</th>
+              <th class="px-4 py-3 text-left">Expected Answer</th>
+              <th class="px-4 py-3 text-left">RAG Answer</th>
+              <th class="px-4 py-3 text-center">Answer<br>Relevancy</th>
+              <th class="px-4 py-3 text-center">Faithfulness</th>
+              <th class="px-4 py-3 text-center">Context<br>Precision</th>
+              <th class="px-4 py-3 text-center">Context<br>Recall</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody" class="divide-y divide-gray-100"></tbody>
+        </table>
+      </div>
+
+      <!-- Averages -->
+      <div id="averagesSection" class="mt-4 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Averages</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="averagesGrid"></div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="errorSection" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+      <i class="fa-solid fa-circle-exclamation mr-2"></i>
+      <span id="errorMsg"></span>
+    </div>
+
+  </div>
+  <script src="evaluation.js"></script>
+</body>
+</html>

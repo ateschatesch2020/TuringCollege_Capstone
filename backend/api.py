@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from chatbot import ChatbotManager
-from rag.rag_vector_db import add_document, delete_document
+from rag.rag_vector_db import add_document, delete_document, _PERSIST_DIR
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pathlib import Path
@@ -52,6 +52,10 @@ class MessageResponse(BaseModel):
 
 class RenameSessionRequest(BaseModel):
     title: str
+
+class EvaluateRequest(BaseModel):
+    filename: str
+    num_questions: int = 20
 
 @app.post("/sessions/create")
 def create_session(request: CreateSessionRequest):
@@ -197,6 +201,51 @@ def delete_document_endpoint(filename: str):
     except Exception as e:
         logger.error("delete_document failed for %s", filename, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/evaluate")
+async def evaluate_endpoint(request: EvaluateRequest):
+    from rag.ragas_evaluator import evaluate_document
+    file_path = os.path.join(_DOCUMENTS_DIR, request.filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    async def event_stream():
+        try:
+            async def progress_cb(stage: str, pct: int):
+                yield f"data: {json.dumps({'stage': stage, 'progress': pct})}\n\n"
+
+            # Generator-based progress doesn't work inside a callback; collect via queue
+            import asyncio
+            queue: asyncio.Queue = asyncio.Queue()
+
+            async def cb(stage: str, pct: int):
+                await queue.put({"stage": stage, "progress": pct})
+
+            async def run_eval():
+                results = await evaluate_document(
+                    file_path=file_path,
+                    persist_directory=_PERSIST_DIR,
+                    num_questions=request.num_questions,
+                    progress_cb=cb,
+                )
+                await queue.put({"done": True, "results": results})
+
+            task = asyncio.create_task(run_eval())
+
+            while True:
+                msg = await queue.get()
+                if msg.get("done"):
+                    yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'results': msg['results']})}\n\n"
+                    break
+                yield f"data: {json.dumps({'stage': msg['stage'], 'progress': msg['progress']})}\n\n"
+
+            await task
+        except Exception as e:
+            logger.error("evaluate_endpoint failed for %s", request.filename, exc_info=True)
+            yield f"data: {json.dumps({'stage': 'Error', 'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ class ChatBot {
     const userInput = document.getElementById("userInput");
     const deleteSessionBtn = document.getElementById("deleteSessionBtn");
 
-    if (newSessionBtn) newSessionBtn.addEventListener("click", () => this.createNewSession());
+    if (newSessionBtn) newSessionBtn.addEventListener("click", () => this.openNewChatModal());
     if (resetBtn) resetBtn.addEventListener("click", () => this.resetSession());
     if (deleteSessionBtn) deleteSessionBtn.addEventListener("click", ()=> this.deleteSession())
     if (sendBtn) {
@@ -60,6 +60,24 @@ class ChatBot {
       if (delBtn) this.deleteDocument(delBtn.dataset.filename);
       const evalBtn = e.target.closest(".eval-doc-btn");
       if (evalBtn) window.open(`evaluation.html?file=${encodeURIComponent(evalBtn.dataset.filename)}`, "_blank");
+    });
+
+    // New Chat modal wiring
+    const closeNewChatBtn = document.getElementById("closeNewChatBtn");
+    const cancelNewChatBtn = document.getElementById("cancelNewChatBtn");
+    const startChatBtn = document.getElementById("startChatBtn");
+    const fileSearchBtn = document.getElementById("fileSearchBtn");
+    const formCancelUploadBtn = document.getElementById("formCancelUploadBtn");
+    if (closeNewChatBtn) closeNewChatBtn.addEventListener("click", () => this.closeNewChatModal());
+    if (cancelNewChatBtn) cancelNewChatBtn.addEventListener("click", () => this.closeNewChatModal());
+    if (startChatBtn) startChatBtn.addEventListener("click", () => this.startNewChat());
+    if (fileSearchBtn) fileSearchBtn.addEventListener("click", () => this.searchFilesInModal());
+    if (formCancelUploadBtn) formCancelUploadBtn.addEventListener("click", () => this.cancelUpload());
+    document.getElementById("fileSearchKeyword")?.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") this.searchFilesInModal();
+    });
+    document.getElementById("newChatModal")?.addEventListener("click", (e) => {
+      if (e.target === document.getElementById("newChatModal")) this.closeNewChatModal();
     });
 
     //load all sessions on the left side of page
@@ -309,21 +327,86 @@ class ChatBot {
     } catch {}
   }
 
-  async createNewSession() {
-    const title = prompt("Chat title:", "New Topic");
-    if (!title) return;
+  openNewChatModal() {
+    document.getElementById("newChatTitle").value = "";
+    document.getElementById("fileSearchKeyword").value = "";
+    document.getElementById("formSearchResults").classList.add("hidden");
+    document.getElementById("formSearchResults").innerHTML = "";
+    document.getElementById("formUploadProgress").classList.add("hidden");
+    document.getElementById("formUploadBar").style.width = "0%";
+    const modal = document.getElementById("newChatModal");
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+    document.getElementById("newChatTitle").focus();
+  }
 
+  closeNewChatModal() {
+    const modal = document.getElementById("newChatModal");
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+
+  async searchFilesInModal() {
+    const keyword = document.getElementById("fileSearchKeyword").value.trim();
+    if (!keyword) return;
+    const exact = document.getElementById("exactMatchCheck").checked;
+    const contains = document.getElementById("containsNameCheck").checked;
+    if (!exact && !contains) {
+      alert("Please select at least one search mode (Exact match or Contains in name).");
+      return;
+    }
+
+    const btn = document.getElementById("fileSearchBtn");
+    const loading = document.getElementById("formSearchLoading");
+    const resultsEl = document.getElementById("formSearchResults");
+
+    btn.disabled = true;
+    loading.classList.remove("hidden");
+    resultsEl.classList.add("hidden");
+
+    try {
+      const res = await fetch(`${this.API_URL}/form/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword, exact_match: exact, contains_name: contains }),
+      });
+      const data = await res.json();
+      resultsEl.innerHTML = this.renderContent(data.result);
+      resultsEl.classList.remove("hidden");
+      this.initFileSelectWidgets(resultsEl, {
+        container: "formUploadProgress",
+        stage: "formUploadStage",
+        bar: "formUploadBar",
+        cancel: "formCancelUploadBtn",
+      });
+    } catch (e) {
+      resultsEl.innerHTML = '<p class="text-xs text-red-400">Search failed. Is the backend running?</p>';
+      resultsEl.classList.remove("hidden");
+      console.error(e);
+    } finally {
+      btn.disabled = false;
+      loading.classList.add("hidden");
+    }
+  }
+
+  async startNewChat() {
+    const title = document.getElementById("newChatTitle").value.trim() || "New Chat";
+    this.closeNewChatModal();
     try {
       const res = await fetch(`${this.API_URL}/sessions/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: this.USER_ID, title: title }),
+        body: JSON.stringify({ user_id: this.USER_ID, title }),
       });
       const data = await res.json();
       await this.loadChatHistory(data.session_id);
     } catch (error) {
       console.error(error);
     }
+  }
+
+  async createNewSession() {
+    this.openNewChatModal();
   }
 
   appendMessage(role, text) {
@@ -356,7 +439,7 @@ class ChatBot {
     return marked.parse(text, { breaks: true });
   }
 
-  initFileSelectWidgets(container) {
+  initFileSelectWidgets(container, progressIds = {}) {
     container.querySelectorAll("code.language-file-select").forEach(codeEl => {
       const pre = codeEl.parentElement;
       if (!pre || pre.tagName !== "PRE") return;
@@ -406,18 +489,18 @@ class ChatBot {
 
       uploadBtn.addEventListener("click", () => {
         const paths = [...widget.querySelectorAll(".file-select-cb:checked")].map(cb => cb.dataset.path);
-        this.ingestPaths(paths, widget);
+        this.ingestPaths(paths, widget, progressIds);
       });
     });
   }
 
-  async ingestPaths(paths, widgetEl) {
+  async ingestPaths(paths, widgetEl, progressIds = {}) {
     const uploadBtn = widgetEl?.querySelector(".file-select-upload-btn");
     const statusEl = widgetEl?.querySelector(".file-select-status");
-    const progressContainer = document.getElementById("uploadProgress");
-    const stageLabel = document.getElementById("uploadStageName");
-    const progressBar = document.getElementById("uploadProgressBar");
-    const cancelBtn = document.getElementById("cancelUploadBtn");
+    const progressContainer = document.getElementById(progressIds.container || "uploadProgress");
+    const stageLabel = document.getElementById(progressIds.stage || "uploadStageName");
+    const progressBar = document.getElementById(progressIds.bar || "uploadProgressBar");
+    const cancelBtn = document.getElementById(progressIds.cancel || "cancelUploadBtn");
     const sidebarBtn = document.getElementById("uploadDocBtn");
 
     this.uploadAbortController = new AbortController();

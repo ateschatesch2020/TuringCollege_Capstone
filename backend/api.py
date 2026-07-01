@@ -23,6 +23,7 @@ from typing import List
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from chatbot import ChatbotManager
+from chatform import FormManager
 from rag.rag_vector_db import add_document, delete_document, _PERSIST_DIR
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 chatbot = ChatbotManager()
+form_manager = FormManager()
 
 class CreateSessionRequest(BaseModel):
     user_id: str
@@ -60,6 +62,11 @@ class EvaluateRequest(BaseModel):
 
 class IngestPathsRequest(BaseModel):
     paths: List[str]
+
+class FormSearchRequest(BaseModel):
+    keyword: str
+    exact_match: bool = False
+    contains_name: bool = True
 
 @app.post("/sessions/create")
 def create_session(request: CreateSessionRequest):
@@ -249,6 +256,18 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
                 yield f"data: {json.dumps({'stage': 'Error', 'error': str(e), 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/form/search")
+async def form_search(req: FormSearchRequest):
+    try:
+        result = await asyncio.to_thread(
+            form_manager.search, req.keyword, req.exact_match, req.contains_name
+        )
+        return {"result": result}
+    except Exception as e:
+        logger.error("form_search failed for keyword '%s'", req.keyword, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/files/{filename}")

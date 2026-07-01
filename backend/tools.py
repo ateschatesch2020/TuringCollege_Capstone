@@ -394,4 +394,5 @@ def make_document_search_tool(retriever):
 
 
 class Tools:
-    tools = [web_search, generate_presentation, generate_word_document, generate_pdf_document, search_project_files, find_files_by_name_exact, find_files_by_name_contains]
+    form_tools = [search_project_files, find_files_by_name_exact, find_files_by_name_contains]
+    tools = [web_search, generate_presentation, generate_word_document, generate_pdf_document]

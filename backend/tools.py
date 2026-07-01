@@ -3,6 +3,8 @@ import json
 import os
 import uuid
 from langchain_core.tools import tool
+from langchain_core.runnables import RunnableConfig
+from langchain_chroma import Chroma
 from dotenv import load_dotenv
 load_dotenv()
 import serpapi
@@ -390,15 +392,23 @@ def find_files_by_name_contains(keyword: str) -> str:
 
 
 
-def make_document_search_tool(retriever):
+def make_document_search_tool(retriever, embedding_model=None, sessions_dir: str = None):
     @tool
-    def search_documents(query: str) -> str:
+    def search_documents(query: str, config: RunnableConfig) -> str:
         """Search uploaded company documents for information, policies, procedures, and guidelines.
         Use this for ANY question about content in uploaded documents — product details, pricing,
         procedures, company policies, project information, or any other document content.
         Always search documents before answering questions about company-specific information.
         """
         docs = retriever.invoke(query)
+        if sessions_dir and embedding_model:
+            session_id = (config.get("configurable") or {}).get("thread_id")
+            if session_id:
+                session_dir = os.path.join(sessions_dir, session_id)
+                if os.path.exists(session_dir):
+                    session_vs = Chroma(persist_directory=session_dir, embedding_function=embedding_model)
+                    session_docs = session_vs.as_retriever(search_kwargs={"k": 2}).invoke(query)
+                    docs = docs + session_docs
         return "\n\n".join(d.page_content for d in docs) if docs else "No relevant information found in uploaded documents."
     return search_documents
 

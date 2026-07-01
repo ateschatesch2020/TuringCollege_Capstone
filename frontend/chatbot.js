@@ -5,6 +5,7 @@ class ChatBot {
     this.currentSessionId = null;
     this.abortController = null;
     this.uploadAbortController = null;
+    this.pendingSessionId = null;
   }
 
   async init() {
@@ -76,10 +77,6 @@ class ChatBot {
     document.getElementById("fileSearchKeyword")?.addEventListener("keypress", (e) => {
       if (e.key === "Enter") this.searchFilesInModal();
     });
-    document.getElementById("newChatModal")?.addEventListener("click", (e) => {
-      if (e.target === document.getElementById("newChatModal")) this.closeNewChatModal();
-    });
-
     //load all sessions on the left side of page
     await this.loadSessions();
     await this.loadDocuments();
@@ -284,6 +281,7 @@ class ChatBot {
     this.currentSessionId = sessionId;//assign the clicked session to currentsession
     localStorage.setItem("activeSession", sessionId);
     this.loadSessions();
+    await this.loadDocuments();
 
     try {
       const res = await fetch(`${this.API_URL}/history/${sessionId}`);
@@ -328,6 +326,7 @@ class ChatBot {
   }
 
   openNewChatModal() {
+    this.pendingSessionId = crypto.randomUUID();
     document.getElementById("newChatTitle").value = "";
     document.getElementById("fileSearchKeyword").value = "";
     document.getElementById("formSearchResults").classList.add("hidden");
@@ -341,6 +340,7 @@ class ChatBot {
   }
 
   closeNewChatModal() {
+    this.pendingSessionId = null;
     const modal = document.getElementById("newChatModal");
     modal.classList.add("hidden");
     modal.classList.remove("flex");
@@ -363,6 +363,11 @@ class ChatBot {
     btn.disabled = true;
     loading.classList.remove("hidden");
     resultsEl.classList.add("hidden");
+    const searchBar = document.getElementById("formSearchBar");
+    if (searchBar) {
+      searchBar.style.width = "0%";
+      setTimeout(() => { searchBar.style.width = "80%"; }, 30);
+    }
 
     try {
       const res = await fetch(`${this.API_URL}/form/search`, {
@@ -385,7 +390,8 @@ class ChatBot {
       console.error(e);
     } finally {
       btn.disabled = false;
-      loading.classList.add("hidden");
+      if (searchBar) searchBar.style.width = "100%";
+      setTimeout(() => loading.classList.add("hidden"), 250);
       const footer = document.getElementById("modalFooter");
       if (footer) {
         footer.classList.remove("hidden");
@@ -396,12 +402,13 @@ class ChatBot {
 
   async startNewChat() {
     const title = document.getElementById("newChatTitle").value.trim() || "New Chat";
+    const pendingId = this.pendingSessionId;
     this.closeNewChatModal();
     try {
       const res = await fetch(`${this.API_URL}/sessions/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: this.USER_ID, title }),
+        body: JSON.stringify({ user_id: this.USER_ID, title, session_id: pendingId }),
       });
       const data = await res.json();
       await this.loadChatHistory(data.session_id);
@@ -492,9 +499,22 @@ class ChatBot {
         });
       });
 
-      uploadBtn.addEventListener("click", () => {
+      uploadBtn.addEventListener("click", async () => {
         const paths = [...widget.querySelectorAll(".file-select-cb:checked")].map(cb => cb.dataset.path);
-        this.ingestPaths(paths, widget, progressIds);
+        const statusEl = widget.querySelector(".file-select-status");
+        let filteredPaths = paths;
+        try {
+          const docsRes = await fetch(`${this.API_URL}/documents`);
+          const docsData = await docsRes.json();
+          const indexed = new Set(docsData.documents || []);
+          filteredPaths = paths.filter(p => !indexed.has(p.split(/[/\\]/).pop()));
+          const skipped = paths.length - filteredPaths.length;
+          if (skipped > 0 && statusEl) {
+            statusEl.textContent = `${skipped} file(s) already indexed, skipping.`;
+          }
+        } catch {}
+        if (filteredPaths.length === 0) return;
+        this.ingestPaths(filteredPaths, widget, progressIds);
       });
     });
   }
@@ -526,7 +546,7 @@ class ChatBot {
       const res = await fetch(`${this.API_URL}/documents/ingest-paths`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paths }),
+        body: JSON.stringify({ paths, session_id: this.pendingSessionId }),
         signal,
       });
       if (!res.ok) {
@@ -609,7 +629,10 @@ class ChatBot {
     const list = document.getElementById("documentList");
     if (!list) return;
     try {
-      const res = await fetch(`${this.API_URL}/documents`);
+      const url = this.currentSessionId
+        ? `${this.API_URL}/documents?session_id=${encodeURIComponent(this.currentSessionId)}`
+        : `${this.API_URL}/documents`;
+      const res = await fetch(url);
       if (!res.ok) {
         list.innerHTML = '<p class="text-xs text-red-400 px-2">Could not load documents.</p>';
         return;
@@ -721,7 +744,10 @@ class ChatBot {
     const row = list?.querySelector(`[data-filename="${CSS.escape(filename)}"]`)?.closest("div");
     if (row) row.innerHTML = `<span class="text-xs text-gray-400 px-2 italic"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i>Removing from index...</span>`;
     try {
-      const res = await fetch(`${this.API_URL}/documents/${encodeURIComponent(filename)}`, { method: "DELETE" });
+      const deleteUrl = this.currentSessionId
+        ? `${this.API_URL}/documents/${encodeURIComponent(filename)}?session_id=${encodeURIComponent(this.currentSessionId)}`
+        : `${this.API_URL}/documents/${encodeURIComponent(filename)}`;
+      const res = await fetch(deleteUrl, { method: "DELETE" });
       if (!res.ok) {
         const err = await res.json();
         alert(`Delete failed: ${err.detail}`);

@@ -7,6 +7,7 @@ import threading
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DOCUMENTS_DIR = os.path.join(_ROOT, "documents")
+_SESSION_DOCS_DIR = os.path.join(_DOCUMENTS_DIR, "sessions")
 _GENERATED_FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_files")
 
 logging.basicConfig(
@@ -19,12 +20,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from chatbot import ChatbotManager
 from chatform import FormManager
-from rag.rag_vector_db import add_document, delete_document, _PERSIST_DIR
+from rag.rag_vector_db import (add_document, delete_document,
+                               add_document_for_session, delete_session_vectorstore,
+                               get_session_persist_dir, _PERSIST_DIR)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pathlib import Path
@@ -44,6 +47,7 @@ form_manager = FormManager()
 class CreateSessionRequest(BaseModel):
     user_id: str
     title: str = "New Chat Session"
+    session_id: Optional[str] = None
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -62,6 +66,7 @@ class EvaluateRequest(BaseModel):
 
 class IngestPathsRequest(BaseModel):
     paths: List[str]
+    session_id: Optional[str] = None
 
 class FormSearchRequest(BaseModel):
     keyword: str
@@ -71,7 +76,9 @@ class FormSearchRequest(BaseModel):
 @app.post("/sessions/create")
 def create_session(request: CreateSessionRequest):
     try:
-        session_id = chatbot.create_session(user_id=request.user_id, title=request.title)
+        session_id = chatbot.create_session(
+            user_id=request.user_id, title=request.title, session_id=request.session_id
+        )
         return {"session_id": session_id}
     except Exception as e:
         logger.error("create_session failed", exc_info=True)
@@ -80,7 +87,9 @@ def create_session(request: CreateSessionRequest):
 @app.delete("/sessions/{session_id}")
 def delete_session(session_id: str):
     try:
-        session_id = chatbot.delete_session(session_id=session_id)
+        chatbot.delete_session(session_id=session_id)
+        delete_session_vectorstore(session_id)
+        shutil.rmtree(os.path.join(_SESSION_DOCS_DIR, session_id), ignore_errors=True)
         return {"session_id": session_id}
     except Exception as e:
         logger.error("delete_session failed for %s", session_id, exc_info=True)
@@ -137,8 +146,14 @@ def get_token_usage(session_id: str):
 
 
 @app.get("/documents")
-def list_documents():
-    files = sorted(f for f in os.listdir(_DOCUMENTS_DIR) if f.lower().endswith(".pdf"))
+def list_documents(session_id: Optional[str] = None):
+    if session_id:
+        folder = os.path.join(_SESSION_DOCS_DIR, session_id)
+        if not os.path.isdir(folder):
+            return {"documents": []}
+        files = sorted(f for f in os.listdir(folder) if f.lower().endswith(".pdf"))
+    else:
+        files = sorted(f for f in os.listdir(_DOCUMENTS_DIR) if f.lower().endswith(".pdf"))
     return {"documents": files}
 
 
@@ -217,27 +232,38 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
     if not valid_paths:
         raise HTTPException(status_code=400, detail=f"No valid PDF paths. {'; '.join(errors)}")
 
+    session_id = body.session_id or None
+
     async def event_stream():
         total = len(valid_paths)
         for idx, src_path in enumerate(valid_paths):
             fname = os.path.basename(src_path)
-            dest_path = os.path.join(_DOCUMENTS_DIR, fname)
             cancel_event = threading.Event()
             try:
-                yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
-                shutil.copy2(src_path, dest_path)
+                if session_id:
+                    session_docs_dir = os.path.join(_SESSION_DOCS_DIR, session_id)
+                    os.makedirs(session_docs_dir, exist_ok=True)
+                    dest_path = os.path.join(session_docs_dir, fname)
+                    yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                    shutil.copy2(src_path, dest_path)
+                    yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                    add_task = asyncio.create_task(
+                        asyncio.to_thread(add_document_for_session, dest_path, session_id, cancel_event)
+                    )
+                else:
+                    dest_path = os.path.join(_DOCUMENTS_DIR, fname)
+                    yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                    shutil.copy2(src_path, dest_path)
+                    yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                    add_task = asyncio.create_task(
+                        asyncio.to_thread(add_document, dest_path, cancel_event=cancel_event)
+                    )
 
-                yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
-                add_task = asyncio.create_task(
-                    asyncio.to_thread(add_document, dest_path, cancel_event=cancel_event)
-                )
                 while not add_task.done():
                     await asyncio.sleep(0.5)
                     if await request.is_disconnected():
                         cancel_event.set()
                         add_task.cancel()
-                        if os.path.exists(dest_path):
-                            os.remove(dest_path)
                         logger.info("ingest-paths cancelled by client: %s", fname)
                         return
 
@@ -245,8 +271,10 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
                 if cancel_event.is_set() or chunk_count == 0:
                     return
 
-                yield f"data: {json.dumps({'stage': 'Refreshing index...', 'progress': 85, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
-                await asyncio.to_thread(chatbot.reload_vectorstore)
+                if not session_id:
+                    yield f"data: {json.dumps({'stage': 'Refreshing index...', 'progress': 85, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                    await asyncio.to_thread(chatbot.reload_vectorstore)
+
                 yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'chunks': chunk_count, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
                 logger.info("Ingested from path %s (%d chunks)", fname, chunk_count)
             except asyncio.CancelledError:
@@ -279,14 +307,20 @@ def download_generated_file(filename: str):
 
 
 @app.delete("/documents/{filename}")
-def delete_document_endpoint(filename: str):
-    file_path = os.path.join(_DOCUMENTS_DIR, filename)
+def delete_document_endpoint(filename: str, session_id: Optional[str] = None):
+    if session_id:
+        file_path = os.path.join(_SESSION_DOCS_DIR, session_id, filename)
+        persist_dir = get_session_persist_dir(session_id)
+    else:
+        file_path = os.path.join(_DOCUMENTS_DIR, filename)
+        persist_dir = _PERSIST_DIR
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
     try:
-        removed = delete_document(file_path)
+        removed = delete_document(file_path, persist_dir)
         os.remove(file_path)
-        chatbot.reload_vectorstore()
+        if not session_id:
+            chatbot.reload_vectorstore()
         logger.info("Deleted %s (%d chunks removed from ChromaDB)", filename, removed)
         return {"filename": filename, "chunks_removed": removed}
     except Exception as e:

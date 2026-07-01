@@ -87,7 +87,12 @@ class ChatbotManager:
             search_kwargs={"k": 2})
         self._init_session_db()
 
-        self.tools.append(make_document_search_tool(self.retriever))
+        sessions_dir = os.path.join(_root, "chroma_db", "sessions")
+        self.tools.append(make_document_search_tool(
+            self.retriever,
+            embedding_model=self.embedding_model,
+            sessions_dir=sessions_dir,
+        ))
         self.llm_with_tools = self.model.bind_tools(self.tools)
 
         worker_llm = self.model
@@ -181,9 +186,9 @@ class ChatbotManager:
             connection=self.connection_string
         )
 
-    def create_session(self, user_id: str, title: str) -> str:
+    def create_session(self, user_id: str, title: str, session_id: str = None) -> str:
         """ creates a row in chat_sessions table."""
-        session_id = str(uuid.uuid4())
+        session_id = session_id or str(uuid.uuid4())
         try:
             with sqlite3.connect(self.db_file_path) as conn:
                 conn.execute('''

@@ -11,6 +11,7 @@ load_dotenv()
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _PERSIST_DIR = os.path.join(_ROOT, "chroma_db")
+_SESSIONS_DIR = os.path.join(_PERSIST_DIR, "sessions")
 
 def _get_embedding_model():
     return OpenAIEmbeddings(
@@ -49,6 +50,33 @@ def delete_document(file_path: str, persist_directory: str = _PERSIST_DIR) -> in
     if ids:
         vectorstore.delete(ids)
     return len(ids)
+
+
+def get_session_persist_dir(session_id: str) -> str:
+    return os.path.join(_SESSIONS_DIR, session_id)
+
+
+def add_document_for_session(file_path: str, session_id: str,
+                             cancel_event: threading.Event = None) -> int:
+    """Embed a PDF into a session-specific ChromaDB. Returns chunk count."""
+    session_dir = get_session_persist_dir(session_id)
+    os.makedirs(session_dir, exist_ok=True)
+
+    docs = _load_pdf(file_path)
+    chunks = SemanticChunker(_get_embedding_model()).split_documents(docs)
+
+    if cancel_event is not None and cancel_event.is_set():
+        return 0
+
+    vectorstore = Chroma(persist_directory=session_dir, embedding_function=_get_embedding_model())
+    vectorstore.add_documents(chunks)
+    return len(chunks)
+
+
+def delete_session_vectorstore(session_id: str) -> None:
+    """Remove the entire ChromaDB directory for a session."""
+    session_dir = get_session_persist_dir(session_id)
+    shutil.rmtree(session_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

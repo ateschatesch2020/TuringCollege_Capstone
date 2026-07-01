@@ -47,6 +47,16 @@
     .message-content a:hover { color: #1d4ed8; }
     .message-content code { background: #f3f4f6; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.85em; }
     .message-content pre { background: #f3f4f6; padding: 0.75rem; border-radius: 6px; overflow-x: auto; margin: 0.4rem 0; }
+    @keyframes search-shimmer {
+      0%   { background-position: 200% center; }
+      100% { background-position: -200% center; }
+    }
+    .search-bar-shimmer {
+      background: linear-gradient(90deg, #3b82f6 25%, #93c5fd 50%, #3b82f6 75%);
+      background-size: 200% auto;
+      animation: search-shimmer 1.4s linear infinite;
+      transition: width 0.3s ease;
+    }
   </style>
 </head>
 
@@ -203,8 +213,11 @@
             </label>
           </div>
 
-          <div id="formSearchLoading" class="hidden text-xs text-gray-400 flex items-center gap-2 py-1">
-            <i class="fa-solid fa-circle-notch fa-spin"></i> Searching...
+          <div id="formSearchLoading" class="hidden py-1">
+            <p class="text-xs text-gray-400 mb-1">Searching...</p>
+            <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+              <div id="formSearchBar" class="h-1.5 rounded-full search-bar-shimmer" style="width:0%"></div>
+            </div>
           </div>
 
           <div id="formSearchResults" class="hidden overflow-x-auto min-w-0 break-words text-sm"></div>

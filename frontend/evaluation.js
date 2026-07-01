@@ -7,10 +7,22 @@ document.getElementById("fileLabel").textContent = filename
   ? `Document: ${filename}`
   : "No document selected.";
 
-function metricColor(value) {
-  if (value >= 0.75) return "#d1fae5";
-  if (value >= 0.35) return "#fef9c3";
-  return "#fee2e2";
+function scoreToColor(value) {
+  const stops = [
+    [0,    [254, 226, 226]],
+    [0.25, [255, 237, 213]],
+    [0.5,  [254, 249, 195]],
+    [0.75, [217, 249, 157]],
+    [1.0,  [209, 250, 229]],
+  ];
+  value = Math.max(0, Math.min(1, value));
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (value <= stops[i + 1][0]) { lo = stops[i]; hi = stops[i + 1]; break; }
+  }
+  const t = (hi[0] - lo[0]) === 0 ? 0 : (value - lo[0]) / (hi[0] - lo[0]);
+  const [r, g, b] = [0, 1, 2].map(c => Math.round(lo[1][c] + t * (hi[1][c] - lo[1][c])));
+  return `rgb(${r},${g},${b})`;
 }
 
 function renderTable(results) {
@@ -19,7 +31,7 @@ function renderTable(results) {
     const metrics = ["answer_relevancy", "faithfulness", "context_precision", "context_recall"];
     const metricCells = metrics.map(m => {
       const v = r[m] ?? 0;
-      const bg = metricColor(v);
+      const bg = scoreToColor(v);
       return `<td class="px-4 py-3 text-center font-mono" style="background:${bg}">${v.toFixed(2)}</td>`;
     }).join("");
     return `<tr class="hover:bg-gray-50">
@@ -39,13 +51,20 @@ function renderTable(results) {
     context_precision: "Context Precision",
     context_recall: "Context Recall",
   };
+  const tips = {
+    answer_relevancy: "Formula: AR = mean cos_sim(generated_question, original_question)<br><br>LLM generates N questions from the answer and measures their cosine similarity to the original question. High score → answer is on-topic.",
+    faithfulness: "Formula: F = supported_claims / total_claims<br><br>Each claim in the answer is checked against the retrieved context. Claims not grounded in context reduce the score.",
+    context_precision: "Formula: CP = relevant_contexts / total_retrieved_contexts<br><br>Measures the signal-to-noise ratio of retrieved chunks. High score → less irrelevant context retrieved.",
+    context_recall: "Formula: CR = info_in_context / total_info_needed<br><br>Measures how much of the information required to produce the reference answer is present in the retrieved context. Low score → important context is missing.",
+  };
   const grid = document.getElementById("averagesGrid");
   grid.innerHTML = metrics.map(m => {
     const avg = results.reduce((s, r) => s + (r[m] ?? 0), 0) / results.length;
-    const bg = metricColor(avg);
-    return `<div class="rounded-lg p-3 text-center" style="background:${bg}">
+    const bg = scoreToColor(avg);
+    return `<div class="metric-card rounded-lg p-3 text-center" style="background:${bg}">
       <div class="text-xs text-gray-600 mb-1">${labels[m]}</div>
       <div class="text-xl font-bold text-gray-800">${avg.toFixed(3)}</div>
+      <div class="tip"><strong>${labels[m]}</strong><br>${tips[m]}</div>
     </div>`;
   }).join("");
 }

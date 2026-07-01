@@ -6,6 +6,33 @@
   <title>RAGAs Evaluation</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    .metric-th { position: relative; cursor: help; }
+    .metric-th .tip {
+      display: none; position: absolute; bottom: calc(100% + 6px);
+      left: 50%; transform: translateX(-50%);
+      background: #1f2937; color: #f9fafb;
+      padding: 10px 14px; border-radius: 8px;
+      font-size: 11px; width: 260px; z-index: 50;
+      line-height: 1.6; font-weight: normal;
+      text-transform: none; letter-spacing: normal;
+      white-space: normal; pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .metric-th:hover .tip { display: block; }
+    .metric-card { position: relative; cursor: help; }
+    .metric-card .tip {
+      display: none; position: absolute; bottom: calc(100% + 6px);
+      left: 50%; transform: translateX(-50%);
+      background: #1f2937; color: #f9fafb;
+      padding: 10px 14px; border-radius: 8px;
+      font-size: 11px; width: 260px; z-index: 50;
+      line-height: 1.6; font-weight: normal;
+      white-space: normal; pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .metric-card:hover .tip { display: block; }
+  </style>
 </head>
 <body class="bg-gray-50 min-h-screen p-6">
   <div class="max-w-7xl mx-auto">
@@ -46,10 +73,10 @@
     <div id="resultsSection" class="hidden">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold text-gray-700">Results</h2>
-        <div class="flex items-center gap-4 text-xs text-gray-500">
-          <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#d1fae5"></span> ≥ 0.75</span>
-          <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#fef9c3"></span> 0.35 – 0.75</span>
-          <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background:#fee2e2"></span> &lt; 0.35</span>
+        <div class="flex items-center gap-2 text-xs text-gray-500">
+          <span>0</span>
+          <div style="width:120px;height:12px;border-radius:6px;background:linear-gradient(to right,#fee2e2,#fed7aa,#fef9c3,#d9f99d,#d1fae5)"></div>
+          <span>1</span>
         </div>
       </div>
       <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200">
@@ -60,10 +87,34 @@
               <th class="px-4 py-3 text-left">Question</th>
               <th class="px-4 py-3 text-left">Expected Answer</th>
               <th class="px-4 py-3 text-left">RAG Answer</th>
-              <th class="px-4 py-3 text-center">Answer<br>Relevancy</th>
-              <th class="px-4 py-3 text-center">Faithfulness</th>
-              <th class="px-4 py-3 text-center">Context<br>Precision</th>
-              <th class="px-4 py-3 text-center">Context<br>Recall</th>
+              <th class="px-4 py-3 text-center metric-th">Answer<br>Relevancy
+                <div class="tip">
+                  <strong>Answer Relevancy</strong><br>
+                  Formula: AR = mean cos_sim(generated_question, original_question)<br><br>
+                  LLM generates N questions from the answer and measures their cosine similarity to the original question. High score → answer is on-topic.
+                </div>
+              </th>
+              <th class="px-4 py-3 text-center metric-th">Faithfulness
+                <div class="tip">
+                  <strong>Faithfulness</strong><br>
+                  Formula: F = supported_claims / total_claims<br><br>
+                  Each claim in the answer is checked against the retrieved context. Claims not grounded in context reduce the score.
+                </div>
+              </th>
+              <th class="px-4 py-3 text-center metric-th">Context<br>Precision
+                <div class="tip">
+                  <strong>Context Precision</strong><br>
+                  Formula: CP = relevant_contexts / total_retrieved_contexts<br><br>
+                  Measures the signal-to-noise ratio of retrieved chunks. High score → less irrelevant context retrieved.
+                </div>
+              </th>
+              <th class="px-4 py-3 text-center metric-th">Context<br>Recall
+                <div class="tip">
+                  <strong>Context Recall</strong><br>
+                  Formula: CR = info_in_context / total_info_needed<br><br>
+                  Measures how much of the information required to produce the reference answer is present in the retrieved context. Low score → important context is missing.
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody id="resultsBody" class="divide-y divide-gray-100"></tbody>

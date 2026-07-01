@@ -189,13 +189,14 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
     if not projects_dir:
         raise HTTPException(status_code=400, detail="PROJECTS_DIR is not configured on the server.")
 
-    abs_projects = os.path.abspath(projects_dir)
+    abs_projects = os.path.normcase(os.path.abspath(projects_dir))
+    abs_projects_prefix = abs_projects if abs_projects.endswith(os.sep) else abs_projects + os.sep
 
     valid_paths = []
     errors = []
     for p in body.paths:
-        abs_p = os.path.abspath(p)
-        if not (abs_p == abs_projects or abs_p.startswith(abs_projects + os.sep)):
+        abs_p = os.path.normcase(os.path.abspath(p))
+        if not (abs_p == abs_projects or abs_p.startswith(abs_projects_prefix)):
             errors.append(f"Access denied: {p}")
             continue
         if not p.lower().endswith(".pdf"):

@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import faiss
 import numpy as np
 import json
@@ -266,8 +267,7 @@ class ChatbotManager:
             today = date.today().strftime("%Y-%m-%d")
             message = f"Today's date: {today}.\n\nQuestion: {query}"
             full_response = ""
-            #print("MESSAGE TO GRAPH:", message)
-            #print("SESSION ID:", session_id)
+            file_select_blocks = []
             for msg_chunk, metadata in self.graph.stream(
                 {
                     "messages": [HumanMessage(content=message)],
@@ -282,6 +282,14 @@ class ChatbotManager:
                 if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
                     full_response += msg_chunk.content
                     yield msg_chunk.content
+                elif isinstance(msg_chunk, ToolMessage):
+                    for match in re.finditer(r'```file-select\n.*?\n```', msg_chunk.content or "", re.DOTALL):
+                        file_select_blocks.append(match.group(0))
+
+            if file_select_blocks and "```file-select" not in full_response:
+                extra = "\n\n" + "\n\n".join(file_select_blocks)
+                yield extra
+                full_response += extra
         except Exception as e:
             logger.error("chat_stream failed for session %s", session_id, exc_info=True)
             full_response = "Sorry, I encountered an error while processing your request."
@@ -332,15 +340,29 @@ class ChatbotManager:
 
     def worker(self, state: State) -> Dict[str, Any]:
         system_message = f"""You are an Office Helper assistant. Help users work with their company documents and create professional outputs.
-        You have tools to search uploaded documents, search the web, and generate presentations, Word documents, and PDF files.
-        For ANY question about uploaded documents, ALWAYS use search_documents first.
-        For current information not in documents, use web_search.
-        When generating files, use the appropriate tool and include the download link in your response.
-        For checklists, tables, or lists shown in chat, generate them as formatted markdown without using a file tool.
-        NEVER invent document content — only use what search_documents returns.
+        The current date and time is {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.
+
+        TOOL ROUTING — choose the right tool for each request:
+
+        • search_documents: Use for ANY question, summary, extraction, or analysis related to uploaded documents.
+          - User asks a question → always call search_documents first before answering.
+          - User wants a summary, key points, or specific info from a document → search_documents.
+          - User wants to create a presentation, report, or document based on uploaded content → search_documents first, then generate the file.
+          - NEVER answer document-related questions from memory — only use what search_documents returns.
+
+        • web_search: Use when the question requires current, real-time, or up-to-date information that cannot be in uploaded documents.
+          - News, prices, weather, live schedules, recent events → web_search.
+          - Do NOT use web_search for questions that can be answered from uploaded documents.
+
+        • generate_presentation / generate_word_document / generate_pdf_document: Use when the user explicitly asks for a downloadable file.
+          - Always include the download link in your response.
+          - For lists, tables, or summaries shown inline in chat, use formatted markdown — no file tool needed unless a download is requested.
+
+        • find_files_by_name_exact / find_files_by_name_contains / search_project_files: Use only when the user explicitly asks to find or locate files on disk.
+          - If the user is asking a question or requesting information, do NOT use these — use search_documents instead.
+          - If tool output contains a ```file-select block, include it verbatim in your response so the user can select files for upload.
+
         Reply in the user's language.
-        The current date and time is {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-        If a tool returns output that contains a ```file-select code block, include that block verbatim in your response without any modification, so the user can select files for upload to the knowledge base.
 
         This is the success criteria:
         {state["success_criteria"]}

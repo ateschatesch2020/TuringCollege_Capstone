@@ -385,12 +385,12 @@ class ChatBot {
 
       widget.innerHTML = `
         <div class="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1">
-          <i class="fa-solid fa-file-arrow-up"></i> Bilgi tabanına eklemek için dosya seçin
+          <i class="fa-solid fa-file-arrow-up"></i> Select files to add to knowledge base
         </div>
         <div class="space-y-0.5">${itemsHtml}</div>
         <div class="mt-2 flex items-center gap-2">
           <button class="file-select-upload-btn bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors" disabled>
-            <i class="fa-solid fa-upload mr-1"></i> Seçilenleri Yükle
+            <i class="fa-solid fa-upload mr-1"></i> Upload Selected
           </button>
           <span class="file-select-status text-xs text-gray-400"></span>
         </div>`;
@@ -443,7 +443,7 @@ class ChatBot {
       });
       if (!res.ok) {
         const err = await res.json();
-        if (statusEl) statusEl.textContent = `Hata: ${err.detail}`;
+        if (statusEl) statusEl.textContent = `Error: ${err.detail}`;
         return;
       }
       const reader = res.body.getReader();
@@ -460,7 +460,7 @@ class ChatBot {
           if (!line.startsWith("data:")) continue;
           let evt;
           try { evt = JSON.parse(line.slice(5).trim()); } catch { continue; }
-          if (evt.error) { setStage(`Hata: ${evt.error}`, 0); return; }
+          if (evt.error) { setStage(`Error: ${evt.error}`, 0); return; }
           const label = evt.total_files > 1
             ? `[${evt.file_index + 1}/${evt.total_files}] ${evt.stage}`
             : evt.stage;
@@ -470,9 +470,9 @@ class ChatBot {
       }
     } catch (e) {
       if (e.name === "AbortError") {
-        setStage("İptal edildi", 0);
+        setStage("Cancelled", 0);
       } else {
-        if (statusEl) statusEl.textContent = "Yükleme başarısız.";
+        if (statusEl) statusEl.textContent = "Upload failed.";
         console.error(e);
       }
     } finally {

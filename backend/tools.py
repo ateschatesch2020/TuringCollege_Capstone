@@ -235,14 +235,17 @@ def search_project_files(project_name: str, query: str) -> str:
     exact_match = None
     partial_matches = []
     try:
-        for entry in os.scandir(projects_dir):
-            if not entry.is_dir():
-                continue
-            if entry.name.lower() == project_name.lower():
-                exact_match = entry.path
+        for root, dirs, _ in os.walk(projects_dir):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            for d in list(dirs):
+                if d.lower() == project_name.lower():
+                    exact_match = os.path.join(root, d)
+                    dirs.clear()
+                    break
+                if project_name.lower() in d.lower():
+                    partial_matches.append(os.path.join(root, d))
+            if exact_match:
                 break
-            if project_name.lower() in entry.name.lower():
-                partial_matches.append(entry.path)
     except PermissionError as e:
         return f"Permission denied accessing {projects_dir}: {e}"
 
@@ -324,7 +327,7 @@ def find_files_by_name_exact(filename: str) -> str:
     found = []
     for root, dirs, files in os.walk(projects_dir):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
-        for fname in files:
+        for fname in files + dirs:
             if fname.lower() == filename.lower():
                 found.append(os.path.join(root, fname))
                 if len(found) >= 20:
@@ -357,7 +360,7 @@ def find_files_by_name_contains(keyword: str) -> str:
     found = []
     for root, dirs, files in os.walk(projects_dir):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
-        for fname in files:
+        for fname in files + dirs:
             if keyword.lower() in fname.lower():
                 found.append(os.path.join(root, fname))
                 if len(found) >= 30:

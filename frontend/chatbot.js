@@ -386,6 +386,11 @@ class ChatBot {
     } finally {
       btn.disabled = false;
       loading.classList.add("hidden");
+      const footer = document.getElementById("modalFooter");
+      if (footer) {
+        footer.classList.remove("hidden");
+        footer.classList.add("flex");
+      }
     }
   }
 

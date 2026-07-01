@@ -28,8 +28,18 @@ def _file_size_str(path: str) -> str:
 
 
 def _build_file_select_block(paths: list) -> str:
-    """Returns a ```file-select JSON block for PDF files (max 10), or empty string."""
-    pdf_paths = [p for p in paths if p.lower().endswith(".pdf")][:10]
+    """Returns a ```file-select JSON block for PDF files (max 10), or empty string.
+    If a path is a directory, walks into it to collect PDFs."""
+    collected = []
+    for p in paths:
+        if os.path.isdir(p):
+            for root, _, files in os.walk(p):
+                for f in files:
+                    if f.lower().endswith(".pdf"):
+                        collected.append(os.path.join(root, f))
+        elif p.lower().endswith(".pdf"):
+            collected.append(p)
+    pdf_paths = collected[:10]
     if not pdf_paths:
         return ""
     items = []

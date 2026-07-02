@@ -60,7 +60,10 @@ class ChatBot {
       const delBtn = e.target.closest(".delete-doc-btn");
       if (delBtn) this.deleteDocument(delBtn.dataset.filename);
       const evalBtn = e.target.closest(".eval-doc-btn");
-      if (evalBtn) window.open(`evaluation.html?file=${encodeURIComponent(evalBtn.dataset.filename)}`, "_blank");
+      if (evalBtn) {
+        const sessionParam = this.currentSessionId ? `&session_id=${encodeURIComponent(this.currentSessionId)}` : "";
+        window.open(`evaluation.html?file=${encodeURIComponent(evalBtn.dataset.filename)}${sessionParam}`, "_blank");
+      }
     });
 
     // New Chat modal wiring
@@ -364,10 +367,16 @@ class ChatBot {
     loading.classList.remove("hidden");
     resultsEl.classList.add("hidden");
     const searchBar = document.getElementById("formSearchBar");
-    if (searchBar) {
-      searchBar.style.width = "0%";
-      setTimeout(() => { searchBar.style.width = "80%"; }, 30);
-    }
+    const label = document.getElementById("formSearchLabel");
+    if (searchBar) searchBar.style.width = "0%";
+    if (label) label.textContent = "Searching...";
+
+    const formatRemaining = (sec) => sec < 60
+      ? `~${sec}s left`
+      : `~${Math.round(sec / 60)} min left`;
+    let lastPct = null;
+    let lastTime = null;
+    let emaRate = null; // percent per second, EMA-smoothed
 
     try {
       const res = await fetch(`${this.API_URL}/form/search`, {
@@ -375,22 +384,61 @@ class ChatBot {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keyword, exact_match: exact, contains_name: contains }),
       });
-      const data = await res.json();
-      resultsEl.innerHTML = this.renderContent(data.result);
-      resultsEl.classList.remove("hidden");
-      this.initFileSelectWidgets(resultsEl, {
-        container: "formUploadProgress",
-        stage: "formUploadStage",
-        bar: "formUploadBar",
-        cancel: "formCancelUploadBtn",
-      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop();
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) continue;
+          let evt;
+          try { evt = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          if (evt.error) throw new Error(evt.error);
+          if (evt.stage === "Counting files...") {
+            if (label) label.textContent = "Counting files...";
+          } else if (typeof evt.progress === "number") {
+            if (searchBar) searchBar.style.width = evt.progress + "%";
+            const now = performance.now();
+            if (evt.progress < 100) {
+              if (lastTime !== null && evt.progress > lastPct) {
+                const dtSeconds = (now - lastTime) / 1000;
+                const instantRate = (evt.progress - lastPct) / dtSeconds;
+                emaRate = emaRate === null ? instantRate : (0.1 * instantRate + 0.9 * emaRate);
+              }
+              lastPct = evt.progress;
+              lastTime = now;
+              if (label) {
+                label.textContent = emaRate > 0
+                  ? `Searching... (${formatRemaining(Math.round((100 - evt.progress) / emaRate))})`
+                  : "Searching...";
+              }
+            }
+          }
+          if (evt.stage === "Complete") {
+            resultsEl.innerHTML = this.renderContent(evt.result);
+            resultsEl.classList.remove("hidden");
+            this.initFileSelectWidgets(resultsEl, {
+              container: "formUploadProgress",
+              stage: "formUploadStage",
+              bar: "formUploadBar",
+              cancel: "formCancelUploadBtn",
+            });
+          }
+        }
+      }
     } catch (e) {
       resultsEl.innerHTML = '<p class="text-xs text-red-400">Search failed. Is the backend running?</p>';
       resultsEl.classList.remove("hidden");
       console.error(e);
     } finally {
       btn.disabled = false;
-      if (searchBar) searchBar.style.width = "100%";
       setTimeout(() => loading.classList.add("hidden"), 250);
       const footer = document.getElementById("modalFooter");
       if (footer) {
@@ -689,6 +737,7 @@ class ChatBot {
     try {
       const form = new FormData();
       form.append("file", file);
+      if (this.currentSessionId) form.append("session_id", this.currentSessionId);
       const res = await fetch(`${this.API_URL}/documents/upload`, { method: "POST", body: form, signal });
       if (!res.ok) {
         const err = await res.json();

@@ -2,6 +2,7 @@ const API_URL = "http://localhost:8001";
 
 const params = new URLSearchParams(window.location.search);
 const filename = params.get("file") || "";
+const sessionId = params.get("session_id") || "";
 
 document.getElementById("fileLabel").textContent = filename
   ? `Document: ${filename}`
@@ -100,7 +101,7 @@ document.getElementById("runBtn").addEventListener("click", async () => {
     const res = await fetch(`${API_URL}/evaluate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename, num_questions: numQuestions }),
+      body: JSON.stringify({ filename, num_questions: numQuestions, session_id: sessionId || undefined }),
     });
 
     if (!res.ok) {

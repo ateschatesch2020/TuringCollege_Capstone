@@ -1,6 +1,7 @@
 import logging
 import json
 import os
+import time
 import uuid
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
@@ -390,6 +391,69 @@ def find_files_by_name_contains(keyword: str) -> str:
         result.append("  ... (truncated at 30 results)")
     return "\n".join(result) + _build_file_select_block(found)
 
+
+_dir_count_cache: dict[str, tuple[float, int]] = {}
+_DIR_COUNT_CACHE_TTL = 300  # seconds
+
+
+def _get_total_entries(projects_dir: str) -> int:
+    """Total files+dirs under projects_dir, cached for _DIR_COUNT_CACHE_TTL seconds."""
+    now = time.time()
+    cached = _dir_count_cache.get(projects_dir)
+    if cached and now - cached[0] < _DIR_COUNT_CACHE_TTL:
+        return cached[1]
+
+    total = 0
+    for root, dirs, files in os.walk(projects_dir):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        total += len(files) + len(dirs)
+    _dir_count_cache[projects_dir] = (now, total)
+    return total
+
+
+def search_files_with_progress(
+    projects_dir: str,
+    filename: str | None,
+    keyword: str | None,
+    limit_exact: int = 20,
+    limit_contains: int = 30,
+):
+    """Generator: walks projects_dir once looking for exact/contains name matches.
+    Yields ("counting", None) if the entry-count cache needs refreshing, then
+    ("progress", pct) as entries are scanned, then a final
+    ("done", {"exact": [...], "contains": [...]})."""
+    now = time.time()
+    cached = _dir_count_cache.get(projects_dir)
+    if not cached or now - cached[0] >= _DIR_COUNT_CACHE_TTL:
+        yield ("counting", None)
+    total_entries = _get_total_entries(projects_dir)
+
+    visited = 0
+    last_pct = -1
+    exact_found = []
+    contains_found = []
+
+    for root, dirs, files in os.walk(projects_dir):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for fname in files + dirs:
+            visited += 1
+
+            if filename is not None and len(exact_found) < limit_exact and fname.lower() == filename.lower():
+                exact_found.append(os.path.join(root, fname))
+            if keyword is not None and len(contains_found) < limit_contains and keyword.lower() in fname.lower():
+                contains_found.append(os.path.join(root, fname))
+
+            pct = min(99, int(visited / total_entries * 100)) if total_entries else 99
+            if pct > last_pct:
+                last_pct = pct
+                yield ("progress", pct)
+
+        exact_done = filename is None or len(exact_found) >= limit_exact
+        contains_done = keyword is None or len(contains_found) >= limit_contains
+        if exact_done and contains_done:
+            break
+
+    yield ("done", {"exact": exact_found, "contains": contains_found})
 
 
 def make_document_search_tool(retriever, embedding_model=None, sessions_dir: str = None):

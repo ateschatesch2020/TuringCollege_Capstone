@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 from typing import List, Optional
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from chatbot import ChatbotManager
 from chatform import FormManager
 from rag.rag_vector_db import (add_document, delete_document,
@@ -63,6 +63,7 @@ class RenameSessionRequest(BaseModel):
 class EvaluateRequest(BaseModel):
     filename: str
     num_questions: int = 20
+    session_id: Optional[str] = None
 
 class IngestPathsRequest(BaseModel):
     paths: List[str]
@@ -158,10 +159,15 @@ def list_documents(session_id: Optional[str] = None):
 
 
 @app.post("/documents/upload")
-async def upload_document(request: Request, file: UploadFile = File(...)):
+async def upload_document(request: Request, file: UploadFile = File(...), session_id: Optional[str] = Form(None)):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
-    file_path = os.path.join(_DOCUMENTS_DIR, file.filename)
+    if session_id:
+        session_docs_dir = os.path.join(_SESSION_DOCS_DIR, session_id)
+        os.makedirs(session_docs_dir, exist_ok=True)
+        file_path = os.path.join(session_docs_dir, file.filename)
+    else:
+        file_path = os.path.join(_DOCUMENTS_DIR, file.filename)
     content = await file.read()
 
     async def event_stream():
@@ -173,9 +179,14 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
 
             yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30})}\n\n"
 
-            add_task = asyncio.create_task(
-                asyncio.to_thread(add_document, file_path, cancel_event=cancel_event)
-            )
+            if session_id:
+                add_task = asyncio.create_task(
+                    asyncio.to_thread(add_document_for_session, file_path, session_id, cancel_event=cancel_event)
+                )
+            else:
+                add_task = asyncio.create_task(
+                    asyncio.to_thread(add_document, file_path, cancel_event=cancel_event)
+                )
 
             while not add_task.done():
                 await asyncio.sleep(0.5)
@@ -192,8 +203,9 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
             if cancel_event.is_set() or chunk_count == 0:
                 return
 
-            yield f"data: {json.dumps({'stage': 'Refreshing index...', 'progress': 85})}\n\n"
-            await asyncio.to_thread(chatbot.reload_vectorstore)
+            if not session_id:
+                yield f"data: {json.dumps({'stage': 'Refreshing index...', 'progress': 85})}\n\n"
+                await asyncio.to_thread(chatbot.reload_vectorstore)
             yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'chunks': chunk_count, 'filename': file.filename})}\n\n"
             logger.info("Uploaded and indexed %s (%d chunks)", file.filename, chunk_count)
         except asyncio.CancelledError:
@@ -288,14 +300,38 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
 
 @app.post("/form/search")
 async def form_search(req: FormSearchRequest):
-    try:
-        result = await asyncio.to_thread(
-            form_manager.search, req.keyword, req.exact_match, req.contains_name
-        )
-        return {"result": result}
-    except Exception as e:
-        logger.error("form_search failed for keyword '%s'", req.keyword, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    async def event_stream():
+        loop = asyncio.get_event_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def worker():
+            try:
+                for kind, payload in form_manager.search_with_progress(
+                    req.keyword, req.exact_match, req.contains_name
+                ):
+                    loop.call_soon_threadsafe(queue.put_nowait, (kind, payload))
+            except Exception as e:
+                loop.call_soon_threadsafe(queue.put_nowait, ("error", str(e)))
+
+        task = asyncio.create_task(asyncio.to_thread(worker))
+        try:
+            while True:
+                kind, payload = await queue.get()
+                if kind == "counting":
+                    yield f"data: {json.dumps({'stage': 'Counting files...', 'progress': None})}\n\n"
+                elif kind == "progress":
+                    yield f"data: {json.dumps({'stage': 'Searching...', 'progress': payload})}\n\n"
+                elif kind == "done":
+                    yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'result': payload})}\n\n"
+                    break
+                elif kind == "error":
+                    logger.error("form_search failed for keyword '%s': %s", req.keyword, payload)
+                    yield f"data: {json.dumps({'stage': 'Error', 'error': payload})}\n\n"
+                    break
+        finally:
+            await task
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.get("/files/{filename}")
@@ -331,7 +367,12 @@ def delete_document_endpoint(filename: str, session_id: Optional[str] = None):
 @app.post("/evaluate")
 async def evaluate_endpoint(request: EvaluateRequest):
     from rag.ragas_evaluator import evaluate_document
-    file_path = os.path.join(_DOCUMENTS_DIR, request.filename)
+    if request.session_id:
+        file_path = os.path.join(_SESSION_DOCS_DIR, request.session_id, request.filename)
+        persist_dir = get_session_persist_dir(request.session_id)
+    else:
+        file_path = os.path.join(_DOCUMENTS_DIR, request.filename)
+        persist_dir = _PERSIST_DIR
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -350,7 +391,7 @@ async def evaluate_endpoint(request: EvaluateRequest):
             async def run_eval():
                 results = await evaluate_document(
                     file_path=file_path,
-                    persist_directory=_PERSIST_DIR,
+                    persist_directory=persist_dir,
                     num_questions=request.num_questions,
                     progress_cb=cb,
                 )

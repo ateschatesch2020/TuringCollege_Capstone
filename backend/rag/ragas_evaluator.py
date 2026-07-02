@@ -105,7 +105,7 @@ async def evaluate_document(
     qa_pairs = await generate_qa_pairs(doc_content, num_questions, llm)
 
     vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {"source": file_path}})
 
     results = []
     for i, qa in enumerate(qa_pairs):

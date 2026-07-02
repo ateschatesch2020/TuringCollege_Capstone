@@ -15,7 +15,8 @@
       "Bash(python -m pytest backend/tests/test_documents.py -v)",
       "Bash(.venv\\\\Scripts\\\\pip install *)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\atesa\\\\source\\\\repos\\\\TuringCollege_Sprint1Task_V2\" -Recurse -Directory)",
-      "Bash(Select-Object -First 30)"
+      "Bash(Select-Object -First 30)",
+      "Bash(git push *)"
     ]
   }
 }

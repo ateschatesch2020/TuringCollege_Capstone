@@ -676,10 +676,12 @@ class ChatBot {
   async loadDocuments() {
     const list = document.getElementById("documentList");
     if (!list) return;
+    if (!this.currentSessionId) {
+      list.innerHTML = '<p class="text-xs text-gray-400 px-2">Select or start a chat to see its documents.</p>';
+      return;
+    }
     try {
-      const url = this.currentSessionId
-        ? `${this.API_URL}/documents?session_id=${encodeURIComponent(this.currentSessionId)}`
-        : `${this.API_URL}/documents`;
+      const url = `${this.API_URL}/documents?session_id=${encodeURIComponent(this.currentSessionId)}`;
       const res = await fetch(url);
       if (!res.ok) {
         list.innerHTML = '<p class="text-xs text-red-400 px-2">Could not load documents.</p>';
@@ -715,6 +717,10 @@ class ChatBot {
   }
 
   async uploadDocument(file) {
+    if (!this.currentSessionId) {
+      alert("Please start a new chat first.");
+      return;
+    }
     const btn = document.getElementById("uploadDocBtn");
     const progressContainer = document.getElementById("uploadProgress");
     const stageLabel = document.getElementById("uploadStageName");
@@ -737,7 +743,7 @@ class ChatBot {
     try {
       const form = new FormData();
       form.append("file", file);
-      if (this.currentSessionId) form.append("session_id", this.currentSessionId);
+      form.append("session_id", this.currentSessionId);
       const res = await fetch(`${this.API_URL}/documents/upload`, { method: "POST", body: form, signal });
       if (!res.ok) {
         const err = await res.json();
@@ -793,9 +799,7 @@ class ChatBot {
     const row = list?.querySelector(`[data-filename="${CSS.escape(filename)}"]`)?.closest("div");
     if (row) row.innerHTML = `<span class="text-xs text-gray-400 px-2 italic"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i>Removing from index...</span>`;
     try {
-      const deleteUrl = this.currentSessionId
-        ? `${this.API_URL}/documents/${encodeURIComponent(filename)}?session_id=${encodeURIComponent(this.currentSessionId)}`
-        : `${this.API_URL}/documents/${encodeURIComponent(filename)}`;
+      const deleteUrl = `${this.API_URL}/documents/${encodeURIComponent(filename)}?session_id=${encodeURIComponent(this.currentSessionId)}`;
       const res = await fetch(deleteUrl, { method: "DELETE" });
       if (!res.ok) {
         const err = await res.json();

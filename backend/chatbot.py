@@ -17,7 +17,6 @@ from langchain.agents import create_agent
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from operator import itemgetter
-from langchain_chroma import Chroma
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
@@ -78,18 +77,10 @@ class ChatbotManager:
             model="openai/text-embedding-3-small",
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"))
-        persist_directory = os.path.join(_root, "chroma_db")
-        self.persist_directory = persist_directory
-        self.vectorestore = Chroma(
-            persist_directory=persist_directory,
-            embedding_function=self.embedding_model)
-        self.retriever = self.vectorestore.as_retriever(
-            search_kwargs={"k": 2})
         self._init_session_db()
 
         sessions_dir = os.path.join(_root, "chroma_db", "sessions")
         self.tools.append(make_document_search_tool(
-            self.retriever,
             embedding_model=self.embedding_model,
             sessions_dir=sessions_dir,
         ))
@@ -158,12 +149,6 @@ class ChatbotManager:
         except Exception:
             used = 0
         return {"used": used, "total": CONTEXT_WINDOW, "percent": round(used / CONTEXT_WINDOW * 100, 1)}
-
-    def reload_vectorstore(self):
-        self.vectorestore = Chroma(
-            persist_directory=self.persist_directory,
-            embedding_function=self.embedding_model)
-        self.retriever = self.vectorestore.as_retriever(search_kwargs={"k": 2})
 
     def _init_session_db(self):
         """creates chat_sessions table in sqlite db"""

@@ -1,7 +1,9 @@
 """
 Unit tests for document management:
-  - rag.rag_vector_db: add_document, delete_document
+  - rag.rag_vector_db: delete_document
   - api.py: GET /documents, POST /documents/upload, DELETE /documents/{filename}
+
+All document endpoints are session-scoped — every request requires session_id.
 
 Run with:
     pytest backend/tests/test_documents.py
@@ -38,75 +40,6 @@ import api  # noqa: E402  (chatbot already mocked above)
 from api import app  # noqa: E402
 
 client = TestClient(app)
-
-
-# ---------------------------------------------------------------------------
-# add_document
-# ---------------------------------------------------------------------------
-
-class TestAddDocument(unittest.TestCase):
-
-    @patch("rag.rag_vector_db.delete_document")
-    @patch("rag.rag_vector_db.Chroma")
-    @patch("rag.rag_vector_db.RecursiveCharacterTextSplitter")
-    @patch("rag.rag_vector_db._load_pdf")
-    @patch("rag.rag_vector_db._get_embedding_model")
-    def test_loads_pdf_and_adds_chunks(
-        self, mock_emb, mock_load_pdf, mock_splitter_cls, mock_chroma_cls, mock_del
-    ):
-        chunks = [MagicMock(), MagicMock()]
-        mock_load_pdf.return_value = [MagicMock()]
-        mock_splitter_cls.return_value.split_documents.return_value = chunks
-        mock_vs = MagicMock()
-        mock_chroma_cls.return_value = mock_vs
-        mock_del.return_value = 0
-
-        from rag.rag_vector_db import add_document
-        result = add_document("/docs/test.pdf", "/chroma")
-
-        mock_load_pdf.assert_called_once_with("/docs/test.pdf")
-        mock_vs.add_documents.assert_called_once_with(chunks)
-        self.assertEqual(result, 2)
-
-    @patch("rag.rag_vector_db.delete_document")
-    @patch("rag.rag_vector_db.Chroma")
-    @patch("rag.rag_vector_db.RecursiveCharacterTextSplitter")
-    @patch("rag.rag_vector_db._load_pdf")
-    @patch("rag.rag_vector_db._get_embedding_model")
-    def test_deduplicates_by_deleting_existing_chunks_first(
-        self, mock_emb, mock_load_pdf, mock_splitter_cls, mock_chroma_cls, mock_del
-    ):
-        mock_load_pdf.return_value = []
-        mock_splitter_cls.return_value.split_documents.return_value = []
-        mock_chroma_cls.return_value = MagicMock()
-        mock_del.return_value = 5
-
-        from rag.rag_vector_db import add_document
-        add_document("/docs/test.pdf", "/chroma")
-
-        mock_del.assert_called_once_with("/docs/test.pdf", "/chroma")
-
-    @patch("rag.rag_vector_db.delete_document")
-    @patch("rag.rag_vector_db.Chroma")
-    @patch("rag.rag_vector_db.RecursiveCharacterTextSplitter")
-    @patch("rag.rag_vector_db._load_pdf")
-    @patch("rag.rag_vector_db._get_embedding_model")
-    def test_uses_chunk_size_600_overlap_60(
-        self, mock_emb, mock_load_pdf, mock_splitter_cls, mock_chroma_cls, mock_del
-    ):
-        mock_load_pdf.return_value = []
-        mock_splitter_cls.return_value.split_documents.return_value = []
-        mock_chroma_cls.return_value = MagicMock()
-        mock_del.return_value = 0
-
-        from rag.rag_vector_db import add_document
-        add_document("/docs/test.pdf", "/chroma")
-
-        mock_splitter_cls.assert_called_once_with(
-            chunk_size=600,
-            chunk_overlap=60,
-            separators=["\n\n", "\n", ". ", "? ", "! ", " ", ""],
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -161,23 +94,39 @@ class TestListDocumentsEndpoint(unittest.TestCase):
 
     def test_returns_sorted_pdfs_only(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            open(os.path.join(tmpdir, "guide.pdf"), "w").close()
-            open(os.path.join(tmpdir, "policy.pdf"), "w").close()
-            open(os.path.join(tmpdir, "notes.txt"), "w").close()
-            with patch("api._DOCUMENTS_DIR", tmpdir):
-                res = client.get("/documents")
+            session_dir = os.path.join(tmpdir, "test-session")
+            os.makedirs(session_dir)
+            open(os.path.join(session_dir, "guide.pdf"), "w").close()
+            open(os.path.join(session_dir, "policy.pdf"), "w").close()
+            open(os.path.join(session_dir, "notes.txt"), "w").close()
+            with patch("api._SESSION_DOCS_DIR", tmpdir):
+                res = client.get("/documents", params={"session_id": "test-session"})
 
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["documents"], ["guide.pdf", "policy.pdf"])
 
     def test_returns_empty_list_when_directory_has_no_pdfs(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            open(os.path.join(tmpdir, "readme.txt"), "w").close()
-            with patch("api._DOCUMENTS_DIR", tmpdir):
-                res = client.get("/documents")
+            session_dir = os.path.join(tmpdir, "test-session")
+            os.makedirs(session_dir)
+            open(os.path.join(session_dir, "readme.txt"), "w").close()
+            with patch("api._SESSION_DOCS_DIR", tmpdir):
+                res = client.get("/documents", params={"session_id": "test-session"})
 
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["documents"], [])
+
+    def test_returns_empty_list_when_session_has_no_documents_yet(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("api._SESSION_DOCS_DIR", tmpdir):
+                res = client.get("/documents", params={"session_id": "never-uploaded-to"})
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["documents"], [])
+
+    def test_requires_session_id(self):
+        res = client.get("/documents")
+        self.assertEqual(res.status_code, 422)
 
 
 # ---------------------------------------------------------------------------
@@ -189,13 +138,14 @@ class TestUploadDocumentEndpoint(unittest.TestCase):
     def setUp(self):
         _chatbot_instance.reset_mock()
 
-    @patch("api.add_document", return_value=7)
+    @patch("api.add_document_for_session", return_value=7)
     def test_upload_returns_filename_and_chunk_count(self, mock_add):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("api._DOCUMENTS_DIR", tmpdir):
+            with patch("api._SESSION_DOCS_DIR", tmpdir):
                 res = client.post(
                     "/documents/upload",
                     files={"file": ("policy.pdf", b"%PDF content", "application/pdf")},
+                    data={"session_id": "test-session"},
                 )
 
         self.assertEqual(res.status_code, 200)
@@ -204,25 +154,34 @@ class TestUploadDocumentEndpoint(unittest.TestCase):
         self.assertEqual(complete["filename"], "policy.pdf")
         self.assertEqual(complete["chunks"], 7)
 
-    @patch("api.add_document", return_value=5)
-    def test_upload_calls_add_document_and_reload_vectorstore(self, mock_add):
+    @patch("api.add_document_for_session", return_value=5)
+    def test_upload_calls_add_document_for_session(self, mock_add):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("api._DOCUMENTS_DIR", tmpdir):
+            with patch("api._SESSION_DOCS_DIR", tmpdir):
                 client.post(
                     "/documents/upload",
                     files={"file": ("policy.pdf", b"%PDF content", "application/pdf")},
+                    data={"session_id": "test-session"},
                 )
 
         mock_add.assert_called_once()
-        _chatbot_instance.reload_vectorstore.assert_called_once()
+        self.assertEqual(mock_add.call_args.args[1], "test-session")
 
     def test_upload_rejects_non_pdf_with_400(self):
         res = client.post(
             "/documents/upload",
             files={"file": ("notes.txt", b"text content", "text/plain")},
+            data={"session_id": "test-session"},
         )
         self.assertEqual(res.status_code, 400)
         self.assertIn("PDF", res.json()["detail"])
+
+    def test_upload_requires_session_id(self):
+        res = client.post(
+            "/documents/upload",
+            files={"file": ("policy.pdf", b"%PDF content", "application/pdf")},
+        )
+        self.assertEqual(res.status_code, 422)
 
 
 # ---------------------------------------------------------------------------
@@ -237,30 +196,37 @@ class TestDeleteDocumentEndpoint(unittest.TestCase):
     @patch("api.delete_document", return_value=4)
     def test_delete_returns_filename_and_chunks_removed(self, mock_del):
         with tempfile.TemporaryDirectory() as tmpdir:
-            open(os.path.join(tmpdir, "policy.pdf"), "wb").close()
-            with patch("api._DOCUMENTS_DIR", tmpdir):
-                res = client.delete("/documents/policy.pdf")
+            session_dir = os.path.join(tmpdir, "test-session")
+            os.makedirs(session_dir)
+            open(os.path.join(session_dir, "policy.pdf"), "wb").close()
+            with patch("api._SESSION_DOCS_DIR", tmpdir):
+                res = client.delete("/documents/policy.pdf", params={"session_id": "test-session"})
 
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["filename"], "policy.pdf")
         self.assertEqual(res.json()["chunks_removed"], 4)
 
     @patch("api.delete_document", return_value=3)
-    def test_delete_calls_delete_document_and_reload_vectorstore(self, mock_del):
+    def test_delete_calls_delete_document(self, mock_del):
         with tempfile.TemporaryDirectory() as tmpdir:
-            open(os.path.join(tmpdir, "policy.pdf"), "wb").close()
-            with patch("api._DOCUMENTS_DIR", tmpdir):
-                client.delete("/documents/policy.pdf")
+            session_dir = os.path.join(tmpdir, "test-session")
+            os.makedirs(session_dir)
+            open(os.path.join(session_dir, "policy.pdf"), "wb").close()
+            with patch("api._SESSION_DOCS_DIR", tmpdir):
+                client.delete("/documents/policy.pdf", params={"session_id": "test-session"})
 
         mock_del.assert_called_once()
-        _chatbot_instance.reload_vectorstore.assert_called_once()
 
     def test_delete_nonexistent_file_returns_404(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("api._DOCUMENTS_DIR", tmpdir):
-                res = client.delete("/documents/missing.pdf")
+            with patch("api._SESSION_DOCS_DIR", tmpdir):
+                res = client.delete("/documents/missing.pdf", params={"session_id": "test-session"})
 
         self.assertEqual(res.status_code, 404)
+
+    def test_delete_requires_session_id(self):
+        res = client.delete("/documents/policy.pdf")
+        self.assertEqual(res.status_code, 422)
 
 
 if __name__ == "__main__":

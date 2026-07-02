@@ -73,7 +73,12 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ---
 
-## Project: Travel Advisory Chatbot
+## Project: Office Helper / Assistant
+
+A per-session document assistant: each chat session works with the PDFs uploaded into it —
+answering questions, extracting information, and generating summaries, presentations, Word
+documents, and PDFs from that session's own documents. There is no shared/global knowledge
+base — every session's documents and vector store are isolated from every other session's.
 
 ### Running the project
 
@@ -87,12 +92,6 @@ python backend/api.py
 cd frontend && npm run dev
 ```
 
-**Populate vector DB** (run once, or when the source PDF changes) — run from project root:
-```bash
-python backend/rag_vector_db.py
-```
-Source PDF must be at `./documents/Corporate_Travel_and_Expense_Policy.pdf`.
-
 **Run tests** — run from project root:
 ```bash
 pytest backend/tests/
@@ -100,7 +99,7 @@ pytest backend/tests/
 
 ### Required environment variables (.env)
 - `OPENROUTER_API_KEY` — LLM (gpt-4o-mini) and embeddings (text-embedding-3-small) via OpenRouter
-- `SERPAPI_KEY` — Google Flights and Google Hotels via SerpAPI
+- `SERPAPI_KEY` — Google Search via SerpAPI (`web_search` tool)
 
 ### Security
 
@@ -111,22 +110,26 @@ pytest backend/tests/
 
 ```
 Browser (frontend/index.html + chatbot.js)
-    │ HTTP streaming  POST /chat
+    │ HTTP streaming  POST /chat  (session_id required)
     ▼
 backend/api.py  (FastAPI)  → calls chatbot.chat_stream(session_id, query)
     ▼
 backend/chatbot.py  ChatbotManager
-    ├── RAG: Chroma vector DB (chroma_db/) ← populated from PDF by backend/rag_vector_db.py
-    │         top-2 chunks injected as context into every message
-    ├── Agent: LangGraph ReAct agent (myagent)
-    │         tools defined in tools.py → search_flights, search_hotels (SerpAPI)
-    │         memory: MemorySaver keyed by thread_id = session_id
+    ├── Agent: LangGraph graph (worker → tools → evaluator loop)
+    │         tools defined in tools.py: web_search, generate_presentation,
+    │         generate_word_document, generate_pdf_document, search_documents
+    │         memory: SqliteSaver checkpointer keyed by thread_id = session_id
+    ├── search_documents: queries ONLY the active session's own Chroma vector
+    │         store (chroma_db/sessions/{session_id}/) ← populated by uploads
+    │         to that session (documents/sessions/{session_id}/). No global/
+    │         shared document store — every session's documents are isolated.
     └── Session history: SQLite (test_history.db) via SQLChatMessageHistory
 ```
 
 **Request flow:**
-1. `chat_stream` retrieves k=2 RAG docs, prepends as context to the query
-2. Calls `myagent.stream(stream_mode="messages")`
+1. `chat_stream` builds the message and streams `self.graph.stream(..., stream_mode="messages")`
+2. The worker node calls tools as needed — `search_documents` (session-scoped RAG),
+   `web_search`, or the file-generation tools — via LangGraph's ToolNode
 3. Filters `AIMessageChunk` with non-empty content → yields text tokens to API
 4. API returns `StreamingResponse(text/plain)` to frontend
 5. Frontend reads chunks via `fetch` + `ReadableStream`

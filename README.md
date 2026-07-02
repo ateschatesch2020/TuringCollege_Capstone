@@ -1,9 +1,17 @@
-# Travel Advisory Chatbot
+# Office Helper Assistant
 
-AI-powered travel chatbot with real-time flight search, hotel availability, weather forecasts,
-and multi-city itinerary optimization — grounded in company travel policy via RAG.
+A per-session document assistant: each chat session works with the PDFs uploaded into it —
+answering questions, extracting information, and generating summaries, presentations, Word
+documents, and PDFs from that session's own documents. Every session's documents and vector
+store are isolated from every other session's — there is no shared/global knowledge base.
 
 ## Setup
+
+Activate the virtual environment (Windows PowerShell):
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
 
 ```bash
 pip install -r requirements.txt
@@ -13,7 +21,7 @@ Copy `.env` and fill in:
 
 ```
 OPENROUTER_API_KEY=...   # LLM (gpt-4o-mini) and embeddings via OpenRouter
-SERPAPI_KEY=...           # Google Flights and Hotels via SerpAPI
+SERPAPI_KEY=...           # Google Search via SerpAPI (web_search tool)
 ```
 
 ## Running
@@ -32,14 +40,6 @@ python backend/api.py
 cd frontend && npm run dev
 ```
 
-**Populate vector DB** (once, or whenever the source PDF changes):
-
-```bash
-python backend/rag_vector_db.py
-```
-
-Source PDF must be at `./documents/Corporate_Travel_and_Expense_Policy.pdf`.
-
 ## Tests
 
 ```bash
@@ -50,20 +50,22 @@ pytest backend/tests/
 
 ```
 Browser (frontend/index.html + chatbot.js)
-    │ HTTP streaming  POST /chat
+    │ HTTP streaming  POST /chat  (session_id required)
     ▼
 backend/api.py  (FastAPI)  → chatbot.chat_stream(session_id, query)
     ▼
 backend/chatbot.py  ChatbotManager
-    ├── RAG: Chroma vector DB (chroma_db/) ← built by backend/rag_vector_db.py
-    ├── Agent: LangGraph ReAct agent — tools in backend/tools.py
+    ├── Agent: LangGraph graph (worker → tools → evaluator loop) — tools in backend/tools.py
+    ├── search_documents: queries ONLY the active session's own Chroma vector store
+    │         (chroma_db/sessions/{session_id}/), populated from that session's uploads
+    │         (documents/sessions/{session_id}/) — no global/shared document store
     └── Session history: SQLite (test_history.db)
 ```
 
 | File | Purpose |
 |---|---|
-| `backend/api.py` | FastAPI app — POST /chat, /sessions, /history |
-| `backend/chatbot.py` | ChatbotManager, LangGraph agent, Chroma retriever |
-| `backend/tools.py` | LangChain tools: search_flights, search_hotels, search_weather, optimize_itinerary |
-| `backend/itinerary_optimizer.py` | CP-SAT solver (OR-Tools) for multi-city trip optimization |
-| `backend/rag_vector_db.py` | One-time script to build the Chroma vector DB from the PDF |
+| `backend/api.py` | FastAPI app — POST /chat, /sessions, /history, /documents, /evaluate |
+| `backend/chatbot.py` | ChatbotManager, LangGraph agent |
+| `backend/tools.py` | LangChain tools: web_search, generate_presentation, generate_word_document, generate_pdf_document, search_documents |
+| `backend/rag/rag_vector_db.py` | Per-session document embedding/deletion (`add_document_for_session`, `delete_document`) |
+| `backend/rag/ragas_evaluator.py` | RAGAs-style evaluation of a session's document Q&A quality |

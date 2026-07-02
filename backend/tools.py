@@ -456,23 +456,22 @@ def search_files_with_progress(
     yield ("done", {"exact": exact_found, "contains": contains_found})
 
 
-def make_document_search_tool(retriever, embedding_model=None, sessions_dir: str = None):
+def make_document_search_tool(embedding_model, sessions_dir: str):
     @tool
     def search_documents(query: str, config: RunnableConfig) -> str:
-        """Search uploaded company documents for information, policies, procedures, and guidelines.
+        """Search the documents uploaded in this chat session for information.
         Use this for ANY question about content in uploaded documents — product details, pricing,
-        procedures, company policies, project information, or any other document content.
-        Always search documents before answering questions about company-specific information.
+        procedures, policies, project information, or any other document content.
+        Always search documents before answering questions about document-specific information.
         """
-        docs = retriever.invoke(query)
-        if sessions_dir and embedding_model:
-            session_id = (config.get("configurable") or {}).get("thread_id")
-            if session_id:
-                session_dir = os.path.join(sessions_dir, session_id)
-                if os.path.exists(session_dir):
-                    session_vs = Chroma(persist_directory=session_dir, embedding_function=embedding_model)
-                    session_docs = session_vs.as_retriever(search_kwargs={"k": 2}).invoke(query)
-                    docs = docs + session_docs
+        session_id = (config.get("configurable") or {}).get("thread_id")
+        if not session_id:
+            return "No relevant information found in uploaded documents."
+        session_dir = os.path.join(sessions_dir, session_id)
+        if not os.path.exists(session_dir):
+            return "No relevant information found in uploaded documents."
+        session_vs = Chroma(persist_directory=session_dir, embedding_function=embedding_model)
+        docs = session_vs.as_retriever(search_kwargs={"k": 2}).invoke(query)
         return "\n\n".join(d.page_content for d in docs) if docs else "No relevant information found in uploaded documents."
     return search_documents
 

@@ -25,9 +25,9 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from chatbot import ChatbotManager
 from chatform import FormManager
-from rag.rag_vector_db import (add_document, delete_document,
+from rag.rag_vector_db import (delete_document,
                                add_document_for_session, delete_session_vectorstore,
-                               get_session_persist_dir, _PERSIST_DIR)
+                               get_session_persist_dir)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pathlib import Path
@@ -63,11 +63,11 @@ class RenameSessionRequest(BaseModel):
 class EvaluateRequest(BaseModel):
     filename: str
     num_questions: int = 20
-    session_id: Optional[str] = None
+    session_id: str
 
 class IngestPathsRequest(BaseModel):
     paths: List[str]
-    session_id: Optional[str] = None
+    session_id: str
 
 class FormSearchRequest(BaseModel):
     keyword: str
@@ -147,27 +147,21 @@ def get_token_usage(session_id: str):
 
 
 @app.get("/documents")
-def list_documents(session_id: Optional[str] = None):
-    if session_id:
-        folder = os.path.join(_SESSION_DOCS_DIR, session_id)
-        if not os.path.isdir(folder):
-            return {"documents": []}
-        files = sorted(f for f in os.listdir(folder) if f.lower().endswith(".pdf"))
-    else:
-        files = sorted(f for f in os.listdir(_DOCUMENTS_DIR) if f.lower().endswith(".pdf"))
+def list_documents(session_id: str):
+    folder = os.path.join(_SESSION_DOCS_DIR, session_id)
+    if not os.path.isdir(folder):
+        return {"documents": []}
+    files = sorted(f for f in os.listdir(folder) if f.lower().endswith(".pdf"))
     return {"documents": files}
 
 
 @app.post("/documents/upload")
-async def upload_document(request: Request, file: UploadFile = File(...), session_id: Optional[str] = Form(None)):
+async def upload_document(request: Request, file: UploadFile = File(...), session_id: str = Form(...)):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
-    if session_id:
-        session_docs_dir = os.path.join(_SESSION_DOCS_DIR, session_id)
-        os.makedirs(session_docs_dir, exist_ok=True)
-        file_path = os.path.join(session_docs_dir, file.filename)
-    else:
-        file_path = os.path.join(_DOCUMENTS_DIR, file.filename)
+    session_docs_dir = os.path.join(_SESSION_DOCS_DIR, session_id)
+    os.makedirs(session_docs_dir, exist_ok=True)
+    file_path = os.path.join(session_docs_dir, file.filename)
     content = await file.read()
 
     async def event_stream():
@@ -179,14 +173,9 @@ async def upload_document(request: Request, file: UploadFile = File(...), sessio
 
             yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30})}\n\n"
 
-            if session_id:
-                add_task = asyncio.create_task(
-                    asyncio.to_thread(add_document_for_session, file_path, session_id, cancel_event=cancel_event)
-                )
-            else:
-                add_task = asyncio.create_task(
-                    asyncio.to_thread(add_document, file_path, cancel_event=cancel_event)
-                )
+            add_task = asyncio.create_task(
+                asyncio.to_thread(add_document_for_session, file_path, session_id, cancel_event=cancel_event)
+            )
 
             while not add_task.done():
                 await asyncio.sleep(0.5)
@@ -203,9 +192,6 @@ async def upload_document(request: Request, file: UploadFile = File(...), sessio
             if cancel_event.is_set() or chunk_count == 0:
                 return
 
-            if not session_id:
-                yield f"data: {json.dumps({'stage': 'Refreshing index...', 'progress': 85})}\n\n"
-                await asyncio.to_thread(chatbot.reload_vectorstore)
             yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'chunks': chunk_count, 'filename': file.filename})}\n\n"
             logger.info("Uploaded and indexed %s (%d chunks)", file.filename, chunk_count)
         except asyncio.CancelledError:
@@ -244,7 +230,7 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
     if not valid_paths:
         raise HTTPException(status_code=400, detail=f"No valid PDF paths. {'; '.join(errors)}")
 
-    session_id = body.session_id or None
+    session_id = body.session_id
 
     async def event_stream():
         total = len(valid_paths)
@@ -252,24 +238,15 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
             fname = os.path.basename(src_path)
             cancel_event = threading.Event()
             try:
-                if session_id:
-                    session_docs_dir = os.path.join(_SESSION_DOCS_DIR, session_id)
-                    os.makedirs(session_docs_dir, exist_ok=True)
-                    dest_path = os.path.join(session_docs_dir, fname)
-                    yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
-                    shutil.copy2(src_path, dest_path)
-                    yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
-                    add_task = asyncio.create_task(
-                        asyncio.to_thread(add_document_for_session, dest_path, session_id, cancel_event)
-                    )
-                else:
-                    dest_path = os.path.join(_DOCUMENTS_DIR, fname)
-                    yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
-                    shutil.copy2(src_path, dest_path)
-                    yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
-                    add_task = asyncio.create_task(
-                        asyncio.to_thread(add_document, dest_path, cancel_event=cancel_event)
-                    )
+                session_docs_dir = os.path.join(_SESSION_DOCS_DIR, session_id)
+                os.makedirs(session_docs_dir, exist_ok=True)
+                dest_path = os.path.join(session_docs_dir, fname)
+                yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                shutil.copy2(src_path, dest_path)
+                yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                add_task = asyncio.create_task(
+                    asyncio.to_thread(add_document_for_session, dest_path, session_id, cancel_event)
+                )
 
                 while not add_task.done():
                     await asyncio.sleep(0.5)
@@ -282,10 +259,6 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
                 chunk_count = add_task.result()
                 if cancel_event.is_set() or chunk_count == 0:
                     return
-
-                if not session_id:
-                    yield f"data: {json.dumps({'stage': 'Refreshing index...', 'progress': 85, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
-                    await asyncio.to_thread(chatbot.reload_vectorstore)
 
                 yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'chunks': chunk_count, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
                 logger.info("Ingested from path %s (%d chunks)", fname, chunk_count)
@@ -343,20 +316,14 @@ def download_generated_file(filename: str):
 
 
 @app.delete("/documents/{filename}")
-def delete_document_endpoint(filename: str, session_id: Optional[str] = None):
-    if session_id:
-        file_path = os.path.join(_SESSION_DOCS_DIR, session_id, filename)
-        persist_dir = get_session_persist_dir(session_id)
-    else:
-        file_path = os.path.join(_DOCUMENTS_DIR, filename)
-        persist_dir = _PERSIST_DIR
+def delete_document_endpoint(filename: str, session_id: str):
+    file_path = os.path.join(_SESSION_DOCS_DIR, session_id, filename)
+    persist_dir = get_session_persist_dir(session_id)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
     try:
         removed = delete_document(file_path, persist_dir)
         os.remove(file_path)
-        if not session_id:
-            chatbot.reload_vectorstore()
         logger.info("Deleted %s (%d chunks removed from ChromaDB)", filename, removed)
         return {"filename": filename, "chunks_removed": removed}
     except Exception as e:
@@ -367,12 +334,8 @@ def delete_document_endpoint(filename: str, session_id: Optional[str] = None):
 @app.post("/evaluate")
 async def evaluate_endpoint(request: EvaluateRequest):
     from rag.ragas_evaluator import evaluate_document
-    if request.session_id:
-        file_path = os.path.join(_SESSION_DOCS_DIR, request.session_id, request.filename)
-        persist_dir = get_session_persist_dir(request.session_id)
-    else:
-        file_path = os.path.join(_DOCUMENTS_DIR, request.filename)
-        persist_dir = _PERSIST_DIR
+    file_path = os.path.join(_SESSION_DOCS_DIR, request.session_id, request.filename)
+    persist_dir = get_session_persist_dir(request.session_id)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
 

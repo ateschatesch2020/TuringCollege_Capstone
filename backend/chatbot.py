@@ -7,7 +7,7 @@ import json
 import uuid
 import sqlite3
 import tools
-from tools import make_document_search_tool
+from tools import make_document_search_tool, make_hybrid_search_tool
 from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
@@ -82,6 +82,11 @@ class ChatbotManager:
         sessions_dir = os.path.join(_root, "chroma_db", "sessions")
         self.tools.append(make_document_search_tool(
             embedding_model=self.embedding_model,
+            sessions_dir=sessions_dir,
+        ))
+        self.tools.append(make_hybrid_search_tool(
+            embedding_model=self.embedding_model,
+            llm=self.model,
             sessions_dir=sessions_dir,
         ))
         self.llm_with_tools = self.model.bind_tools(self.tools)
@@ -335,6 +340,11 @@ class ChatbotManager:
           - User wants a summary, key points, or specific info from a document → search_documents.
           - User wants to create a presentation, report, or document based on uploaded content → search_documents first, then generate the file.
           - NEVER answer document-related questions from memory — only use what search_documents returns.
+
+        • hybrid_search_documents: A more thorough alternative to search_documents — runs semantic and keyword
+          search separately, merges the results, and re-ranks them with an LLM before returning the top 5 chunks.
+          - Use it when search_documents doesn't return enough relevant information.
+          - Use it when the query needs precise keyword matches (exact names, codes, numbers) alongside semantic matching.
 
         • web_search: Use when the question requires current, real-time, or up-to-date information that cannot be in uploaded documents.
           - News, prices, weather, live schedules, recent events → web_search.

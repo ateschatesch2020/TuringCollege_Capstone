@@ -26,9 +26,9 @@ function scoreToColor(value) {
   return `rgb(${r},${g},${b})`;
 }
 
-function renderTable(results) {
-  const tbody = document.getElementById("resultsBody");
-  tbody.innerHTML = results.map((r, i) => {
+function renderResultsTable(rows, bodyId, gridId) {
+  const tbody = document.getElementById(bodyId);
+  tbody.innerHTML = rows.map((r, i) => {
     const metrics = ["answer_relevancy", "faithfulness", "context_precision", "context_recall"];
     const metricCells = metrics.map(m => {
       const v = r[m] ?? 0;
@@ -58,9 +58,9 @@ function renderTable(results) {
     context_precision: "Formula: CP = relevant_contexts / total_retrieved_contexts<br><br>Measures the signal-to-noise ratio of retrieved chunks. High score → less irrelevant context retrieved.",
     context_recall: "Formula: CR = info_in_context / total_info_needed<br><br>Measures how much of the information required to produce the reference answer is present in the retrieved context. Low score → important context is missing.",
   };
-  const grid = document.getElementById("averagesGrid");
+  const grid = document.getElementById(gridId);
   grid.innerHTML = metrics.map(m => {
-    const avg = results.reduce((s, r) => s + (r[m] ?? 0), 0) / results.length;
+    const avg = rows.reduce((s, r) => s + (r[m] ?? 0), 0) / rows.length;
     const bg = scoreToColor(avg);
     return `<div class="metric-card rounded-lg p-3 text-center" style="background:${bg}">
       <div class="text-xs text-gray-600 mb-1">${labels[m]}</div>
@@ -68,6 +68,14 @@ function renderTable(results) {
       <div class="tip"><strong>${labels[m]}</strong><br>${tips[m]}</div>
     </div>`;
   }).join("");
+}
+
+function renderTable(results) {
+  renderResultsTable(results, "resultsBody", "averagesGrid");
+  renderResultsTable(
+    results.map(r => ({ question: r.question, expected_answer: r.expected_answer, ...r.hybrid })),
+    "hybridResultsBody", "hybridAveragesGrid"
+  );
 }
 
 function escHtml(text) {

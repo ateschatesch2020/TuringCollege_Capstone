@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 load_dotenv()
 
 from .rag_vector_db import _get_embedding_model, _load_pdf
+from tools import hybrid_retrieve
 
 
 def _get_llm() -> ChatOpenAI:
@@ -124,11 +125,25 @@ async def evaluate_document(
         rag_response = await llm.ainvoke(rag_prompt)
         rag_answer = rag_response.content
 
-        fa, ar, cp, cr = await asyncio.gather(
+        hybrid_docs = await asyncio.to_thread(
+            hybrid_retrieve, vectorstore, question, llm, 5, 10, {"source": file_path}
+        )
+        hybrid_contexts = [d.page_content for d in hybrid_docs]
+
+        hybrid_context_str = "\n\n".join(hybrid_contexts)
+        hybrid_prompt = f"Use the following context to answer the question.\n\nContext:\n{hybrid_context_str}\n\nQuestion: {question}"
+        hybrid_response = await llm.ainvoke(hybrid_prompt)
+        hybrid_answer = hybrid_response.content
+
+        fa, ar, cp, cr, h_fa, h_ar, h_cp, h_cr = await asyncio.gather(
             _score_faithfulness(llm, question, rag_answer, contexts),
             _score_answer_relevancy(llm, question, rag_answer),
             _score_context_precision(llm, question, contexts),
             _score_context_recall(llm, expected, contexts),
+            _score_faithfulness(llm, question, hybrid_answer, hybrid_contexts),
+            _score_answer_relevancy(llm, question, hybrid_answer),
+            _score_context_precision(llm, question, hybrid_contexts),
+            _score_context_recall(llm, expected, hybrid_contexts),
         )
 
         results.append({
@@ -139,6 +154,13 @@ async def evaluate_document(
             "answer_relevancy": round(ar, 3),
             "context_precision": round(cp, 3),
             "context_recall": round(cr, 3),
+            "hybrid": {
+                "rag_answer": hybrid_answer,
+                "faithfulness": round(h_fa, 3),
+                "answer_relevancy": round(h_ar, 3),
+                "context_precision": round(h_cp, 3),
+                "context_recall": round(h_cr, 3),
+            },
         })
 
     return results

@@ -1,6 +1,7 @@
 import logging
 import json
 import os
+import re
 import time
 import uuid
 from langchain_core.tools import tool
@@ -474,6 +475,107 @@ def make_document_search_tool(embedding_model, sessions_dir: str):
         docs = session_vs.as_retriever(search_kwargs={"k": 2}).invoke(query)
         return "\n\n".join(d.page_content for d in docs) if docs else "No relevant information found in uploaded documents."
     return search_documents
+
+
+def _keyword_search(vectorstore, query: str, k: int = 10, filter: dict = None) -> list:
+    """Keyword/text search over a session's Chroma store, backed by Chroma's built-in
+    trigram FTS5 full-text index (SQL search under the hood via where_document)."""
+    from langchain_core.documents import Document
+
+    tokens = [t for t in query.lower().split() if len(t) >= 3]
+    if not tokens:
+        return []
+    where_document = {"$contains": tokens[0]} if len(tokens) == 1 else {
+        "$or": [{"$contains": t} for t in tokens]
+    }
+
+    result = vectorstore.get(
+        where=filter, where_document=where_document, limit=50, include=["documents", "metadatas"]
+    )
+    texts = result.get("documents") or []
+    metadatas = result.get("metadatas") or [{}] * len(texts)
+
+    scored = []
+    for text, metadata in zip(texts, metadatas):
+        lowered = text.lower()
+        score = sum(lowered.count(t) for t in tokens)
+        scored.append((score, Document(page_content=text, metadata=metadata or {})))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [doc for _, doc in scored[:k]]
+
+
+def _llm_rerank(llm, query: str, candidates: list, k: int = 5) -> list:
+    """Re-rank candidate chunks against the query with a single listwise LLM call,
+    returning the top k. Falls back to the first k candidates if the LLM output can't
+    be parsed, so the tool never hard-fails on a bad LLM response."""
+    numbered = "\n\n".join(
+        f"[{i}] {doc.page_content[:800]}" for i, doc in enumerate(candidates)
+    )
+    prompt = (
+        f"Query: {query}\n\n"
+        f"Chunks:\n{numbered}\n\n"
+        f"Return ONLY a JSON array of the indices of the top {k} most relevant chunks, "
+        "ordered from most to least relevant, and nothing else. "
+        "Example: [3, 0, 7, 1, 5]"
+    )
+    try:
+        response = llm.invoke(prompt)
+        text = response.content if hasattr(response, "content") else str(response)
+        match = re.search(r"\[[\d,\s]+\]", text)
+        indices = json.loads(match.group()) if match else []
+        ranked = []
+        for i in indices:
+            if isinstance(i, int) and 0 <= i < len(candidates) and candidates[i] not in ranked:
+                ranked.append(candidates[i])
+        if ranked:
+            return ranked[:k]
+    except Exception as e:
+        logger.warning("hybrid_search_documents: LLM rerank failed, falling back: %s", e)
+    return candidates[:k]
+
+
+def hybrid_retrieve(vectorstore, query: str, llm, k: int = 5, candidate_k: int = 10,
+                     filter: dict = None) -> list:
+    """Runs semantic + keyword search (optionally scoped by a metadata filter), merges and
+    dedupes the results, and re-ranks them with an LLM, returning the top k Documents."""
+    semantic_docs = vectorstore.similarity_search(query, k=candidate_k, filter=filter)
+    keyword_docs = _keyword_search(vectorstore, query, k=candidate_k, filter=filter)
+
+    seen = set()
+    combined = []
+    for d in semantic_docs + keyword_docs:
+        if d.page_content not in seen:
+            seen.add(d.page_content)
+            combined.append(d)
+
+    if not combined:
+        return []
+    return combined[:k] if len(combined) <= k else _llm_rerank(llm, query, combined, k=k)
+
+
+def make_hybrid_search_tool(embedding_model, llm, sessions_dir: str):
+    @tool
+    def hybrid_search_documents(query: str, config: RunnableConfig) -> str:
+        """Hybrid search over this session's uploaded documents: runs semantic and keyword
+        search separately, merges the results, and re-ranks them with an LLM before returning
+        the top 5 chunks. Slower than search_documents but more thorough — use it when
+        search_documents doesn't surface enough relevant content, or when the query includes
+        exact terms, names, codes, or numbers that need precise keyword matching alongside
+        semantic matching.
+        """
+        session_id = (config.get("configurable") or {}).get("thread_id")
+        if not session_id:
+            return "No relevant information found in uploaded documents."
+        session_dir = os.path.join(sessions_dir, session_id)
+        if not os.path.exists(session_dir):
+            return "No relevant information found in uploaded documents."
+        session_vs = Chroma(persist_directory=session_dir, embedding_function=embedding_model)
+
+        top = hybrid_retrieve(session_vs, query, llm, k=5, candidate_k=10)
+        if not top:
+            return "No relevant information found in uploaded documents."
+        return "\n\n".join(d.page_content for d in top)
+    return hybrid_search_documents
 
 
 class Tools:

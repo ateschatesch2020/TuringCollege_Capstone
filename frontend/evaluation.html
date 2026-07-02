@@ -79,52 +79,115 @@
           <span>1</span>
         </div>
       </div>
-      <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200">
-        <table class="min-w-full text-xs text-gray-700 bg-white">
-          <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
-            <tr>
-              <th class="px-4 py-3 text-left w-8">#</th>
-              <th class="px-4 py-3 text-left">Question</th>
-              <th class="px-4 py-3 text-left">Expected Answer</th>
-              <th class="px-4 py-3 text-left">RAG Answer</th>
-              <th class="px-4 py-3 text-center metric-th">Answer<br>Relevancy
-                <div class="tip">
-                  <strong>Answer Relevancy</strong><br>
-                  Formula: AR = mean cos_sim(generated_question, original_question)<br><br>
-                  LLM generates N questions from the answer and measures their cosine similarity to the original question. High score → answer is on-topic.
-                </div>
-              </th>
-              <th class="px-4 py-3 text-center metric-th">Faithfulness
-                <div class="tip">
-                  <strong>Faithfulness</strong><br>
-                  Formula: F = supported_claims / total_claims<br><br>
-                  Each claim in the answer is checked against the retrieved context. Claims not grounded in context reduce the score.
-                </div>
-              </th>
-              <th class="px-4 py-3 text-center metric-th">Context<br>Precision
-                <div class="tip">
-                  <strong>Context Precision</strong><br>
-                  Formula: CP = relevant_contexts / total_retrieved_contexts<br><br>
-                  Measures the signal-to-noise ratio of retrieved chunks. High score → less irrelevant context retrieved.
-                </div>
-              </th>
-              <th class="px-4 py-3 text-center metric-th">Context<br>Recall
-                <div class="tip">
-                  <strong>Context Recall</strong><br>
-                  Formula: CR = info_in_context / total_info_needed<br><br>
-                  Measures how much of the information required to produce the reference answer is present in the retrieved context. Low score → important context is missing.
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody id="resultsBody" class="divide-y divide-gray-100"></tbody>
-        </table>
-      </div>
+      <details class="mb-4">
+        <summary class="cursor-pointer select-none text-sm font-medium text-indigo-600 hover:text-indigo-700 mb-2">Show question details</summary>
+        <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200 mt-2">
+          <table class="min-w-full text-xs text-gray-700 bg-white">
+            <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+              <tr>
+                <th class="px-4 py-3 text-left w-8">#</th>
+                <th class="px-4 py-3 text-left">Question</th>
+                <th class="px-4 py-3 text-left">Expected Answer</th>
+                <th class="px-4 py-3 text-left">RAG Answer</th>
+                <th class="px-4 py-3 text-center metric-th">Answer<br>Relevancy
+                  <div class="tip">
+                    <strong>Answer Relevancy</strong><br>
+                    Formula: AR = mean cos_sim(generated_question, original_question)<br><br>
+                    LLM generates N questions from the answer and measures their cosine similarity to the original question. High score → answer is on-topic.
+                  </div>
+                </th>
+                <th class="px-4 py-3 text-center metric-th">Faithfulness
+                  <div class="tip">
+                    <strong>Faithfulness</strong><br>
+                    Formula: F = supported_claims / total_claims<br><br>
+                    Each claim in the answer is checked against the retrieved context. Claims not grounded in context reduce the score.
+                  </div>
+                </th>
+                <th class="px-4 py-3 text-center metric-th">Context<br>Precision
+                  <div class="tip">
+                    <strong>Context Precision</strong><br>
+                    Formula: CP = relevant_contexts / total_retrieved_contexts<br><br>
+                    Measures the signal-to-noise ratio of retrieved chunks. High score → less irrelevant context retrieved.
+                  </div>
+                </th>
+                <th class="px-4 py-3 text-center metric-th">Context<br>Recall
+                  <div class="tip">
+                    <strong>Context Recall</strong><br>
+                    Formula: CR = info_in_context / total_info_needed<br><br>
+                    Measures how much of the information required to produce the reference answer is present in the retrieved context. Low score → important context is missing.
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+      </details>
 
       <!-- Averages -->
       <div id="averagesSection" class="mt-4 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
         <h3 class="text-sm font-semibold text-gray-700 mb-3">Averages</h3>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="averagesGrid"></div>
+      </div>
+
+      <!-- Hybrid Search Results -->
+      <div class="flex items-center justify-between mb-3 mt-8">
+        <h2 class="text-lg font-semibold text-gray-700">Hybrid Search Results</h2>
+        <div class="flex items-center gap-2 text-xs text-gray-500">
+          <span>0</span>
+          <div style="width:120px;height:12px;border-radius:6px;background:linear-gradient(to right,#fee2e2,#fed7aa,#fef9c3,#d9f99d,#d1fae5)"></div>
+          <span>1</span>
+        </div>
+      </div>
+      <details class="mb-4">
+        <summary class="cursor-pointer select-none text-sm font-medium text-indigo-600 hover:text-indigo-700 mb-2">Show question details</summary>
+        <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200 mt-2">
+          <table class="min-w-full text-xs text-gray-700 bg-white">
+            <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+              <tr>
+                <th class="px-4 py-3 text-left w-8">#</th>
+                <th class="px-4 py-3 text-left">Question</th>
+                <th class="px-4 py-3 text-left">Expected Answer</th>
+                <th class="px-4 py-3 text-left">RAG Answer</th>
+                <th class="px-4 py-3 text-center metric-th">Answer<br>Relevancy
+                  <div class="tip">
+                    <strong>Answer Relevancy</strong><br>
+                    Formula: AR = mean cos_sim(generated_question, original_question)<br><br>
+                    LLM generates N questions from the answer and measures their cosine similarity to the original question. High score → answer is on-topic.
+                  </div>
+                </th>
+                <th class="px-4 py-3 text-center metric-th">Faithfulness
+                  <div class="tip">
+                    <strong>Faithfulness</strong><br>
+                    Formula: F = supported_claims / total_claims<br><br>
+                    Each claim in the answer is checked against the retrieved context. Claims not grounded in context reduce the score.
+                  </div>
+                </th>
+                <th class="px-4 py-3 text-center metric-th">Context<br>Precision
+                  <div class="tip">
+                    <strong>Context Precision</strong><br>
+                    Formula: CP = relevant_contexts / total_retrieved_contexts<br><br>
+                    Measures the signal-to-noise ratio of retrieved chunks. High score → less irrelevant context retrieved.
+                  </div>
+                </th>
+                <th class="px-4 py-3 text-center metric-th">Context<br>Recall
+                  <div class="tip">
+                    <strong>Context Recall</strong><br>
+                    Formula: CR = info_in_context / total_info_needed<br><br>
+                    Measures how much of the information required to produce the reference answer is present in the retrieved context. Low score → important context is missing.
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="hybridResultsBody" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <!-- Hybrid Averages -->
+      <div id="hybridAveragesSection" class="mt-4 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Averages</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="hybridAveragesGrid"></div>
       </div>
     </div>
 

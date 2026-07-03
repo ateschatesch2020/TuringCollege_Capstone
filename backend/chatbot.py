@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import time
 import faiss
 import numpy as np
 import json
@@ -49,6 +50,8 @@ class State(TypedDict):
     feedback_on_work: Optional[str]
     success_criteria_met: bool
     user_input_needed: bool
+    tool_retry_deadline: Optional[float]
+    tool_retry_timeout_seconds: int
 
 class EvaluatorOutput(BaseModel):
     feedback: str = Field(description="Feedback on the assistant's response")
@@ -123,12 +126,14 @@ class ChatbotManager:
         graph_builder.add_node("worker", self.worker)
         graph_builder.add_node("tools", ToolNode(tools=self.tools, handle_tool_errors=True))
         graph_builder.add_node("evaluator", self.evaluator)
+        graph_builder.add_node("timeout_notice", self.timeout_notice)
 
         # Add edges
         graph_builder.add_conditional_edges(
-            "worker", self.worker_router, {"tools": "tools", "evaluator": "evaluator"}
+            "worker", self.worker_router, {"tools": "tools", "evaluator": "evaluator", "timeout": "timeout_notice"}
         )
         graph_builder.add_edge("tools", "worker")
+        graph_builder.add_edge("timeout_notice", END)
         graph_builder.add_conditional_edges(
             "evaluator", self.route_based_on_evaluation, {"worker": "worker", "END": END}
         )
@@ -241,6 +246,7 @@ class ChatbotManager:
                     "feedback_on_work": None,
                     "success_criteria_met": False,
                     "user_input_needed": False,
+                    "tool_retry_deadline": None,
                 },
                 config={"configurable": {"thread_id": session_id}})
             response = result["messages"][-1].content
@@ -266,11 +272,15 @@ class ChatbotManager:
                     "feedback_on_work": None,
                     "success_criteria_met": False,
                     "user_input_needed": False,
+                    "tool_retry_deadline": None,
                 },
                 config={"configurable": {"thread_id": session_id}},
                 stream_mode="messages"
             ):
                 if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
+                    full_response += msg_chunk.content
+                    yield msg_chunk.content
+                elif isinstance(msg_chunk, AIMessage) and msg_chunk.content and metadata.get("langgraph_node") == "timeout_notice":
                     full_response += msg_chunk.content
                     yield msg_chunk.content
                 elif isinstance(msg_chunk, ToolMessage):
@@ -390,21 +400,65 @@ class ChatbotManager:
         # Invoke the LLM with tools
         response = self.worker_llm_with_tools.invoke(messages)
 
+        # Establish (or carry forward) the deadline for this turn's tool-retry loop
+        timeout_seconds = state.get("tool_retry_timeout_seconds", 30)
+        deadline = state.get("tool_retry_deadline") or (time.time() + timeout_seconds)
+
         # Return updated state
         return {
             "messages": [response],
+            "tool_retry_deadline": deadline,
+            "tool_retry_timeout_seconds": timeout_seconds,
         }
-    
+
         # it decides whether worker should use a tool or not
-    
+
     def worker_router(self, state: State) -> str:
         last_message = state["messages"][-1]
 
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            deadline = state.get("tool_retry_deadline")
+            if deadline and time.time() > deadline:
+                return "timeout"
             return "tools"
         else:
             return "evaluator"
         
+    def timeout_notice(self, state: State) -> Dict[str, Any]:
+        last_error = "unknown error"
+        for message in reversed(state["messages"]):
+            if isinstance(message, ToolMessage) and str(message.content).startswith("Error:"):
+                last_error = message.content
+                break
+
+        timeout_seconds = state.get("tool_retry_timeout_seconds", 30)
+        next_timeout_seconds = timeout_seconds * 2
+
+        explain_prompt = [
+            SystemMessage(content=(
+                "You explain tool failures to end users in simple, friendly, non-technical "
+                "language. Reply in the same language the user has been using in this conversation."
+            )),
+            HumanMessage(content=(
+                f"A tool call was retried automatically for {timeout_seconds} seconds without "
+                f"succeeding, so the assistant stopped trying to avoid wasting more time. "
+                f"The underlying error was: {last_error}\n\n"
+                f"Write a short message to the user that:\n"
+                f"1. Explains the operation took too long ({timeout_seconds}s) and was stopped.\n"
+                f"2. Briefly explains, in plain terms, what went wrong (translate the technical error).\n"
+                f"3. Asks whether they'd like you to keep trying for longer (about {next_timeout_seconds}s), "
+                f"or would rather try a different approach given the error."
+            )),
+        ]
+        response = self.model.invoke(explain_prompt)
+
+        return {
+            "messages": [response],
+            "user_input_needed": True,
+            "success_criteria_met": False,
+            "tool_retry_timeout_seconds": next_timeout_seconds,
+        }
+
     def format_conversation(self, messages: List[Any]) -> str:
         conversation = "Conversation history:\n\n"
         for message in messages:

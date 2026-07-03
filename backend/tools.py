@@ -201,7 +201,7 @@ def generate_pdf_document(title: str, content: str) -> str:
     pdf.set_auto_page_break(auto=True, margin=15)
 
     pdf.set_font("Helvetica", "B", 18)
-    pdf.multi_cell(0, 10, title, align="C")
+    pdf.multi_cell(0, 10, title, align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(6)
     pdf.set_font("Helvetica", "", 11)
 
@@ -211,20 +211,20 @@ def generate_pdf_document(title: str, content: str) -> str:
             pdf.ln(3)
         elif stripped.startswith("### "):
             pdf.set_font("Helvetica", "B", 12)
-            pdf.multi_cell(0, 7, stripped[4:])
+            pdf.multi_cell(0, 7, stripped[4:], new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 11)
         elif stripped.startswith("## "):
             pdf.set_font("Helvetica", "B", 13)
-            pdf.multi_cell(0, 8, stripped[3:])
+            pdf.multi_cell(0, 8, stripped[3:], new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 11)
         elif stripped.startswith("# "):
             pdf.set_font("Helvetica", "B", 14)
-            pdf.multi_cell(0, 9, stripped[2:])
+            pdf.multi_cell(0, 9, stripped[2:], new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 11)
         elif stripped.startswith("- ") or stripped.startswith("* "):
-            pdf.multi_cell(0, 7, f"  - {stripped[2:]}")
+            pdf.multi_cell(0, 7, f"  - {stripped[2:]}", new_x="LMARGIN", new_y="NEXT")
         else:
-            pdf.multi_cell(0, 7, stripped)
+            pdf.multi_cell(0, 7, stripped, new_x="LMARGIN", new_y="NEXT")
 
     _ensure_generated_dir()
     filename = f"{uuid.uuid4().hex}.pdf"

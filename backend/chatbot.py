@@ -192,8 +192,8 @@ class ChatbotManager:
                 ''', (session_id, user_id, title))
             return session_id
         except Exception as e:
-            logger.error("create_session failed for user %s", user_id, exc_info=True)
-            return "Sorry, I encountered an error while processing your request."
+            logger.error("create_session failed for user %s: %s", user_id, str(e), exc_info=True)
+            return f"Sorry, I encountered an error while processing your request: {e}"
 
     def delete_session(self, session_id: str) -> str:
         """Deletes session and its messages atomically."""
@@ -205,7 +205,7 @@ class ChatbotManager:
                     'DELETE FROM chat_sessions WHERE session_id = ?', (session_id,))
             return session_id
         except Exception as e:
-            logger.error("delete_session failed for %s", session_id, exc_info=True)
+            logger.error("delete_session failed for %s: %s", session_id, str(e), exc_info=True)
             raise
 
     def list_sessions(self, user_id: str):
@@ -251,7 +251,8 @@ class ChatbotManager:
                 config={"configurable": {"thread_id": session_id}})
             response = result["messages"][-1].content
         except Exception as e:
-            logger.error("chat failed for session %s", session_id, exc_info=True)
+            logger.error("chat failed for session %s: %s", session_id, str(e), exc_info=True)
+            response = f"Sorry, I encountered an error while processing your request: {e}"
         finally:
             history = self._get_session_history(session_id)
             history.add_user_message(query)
@@ -292,8 +293,8 @@ class ChatbotManager:
                 yield extra
                 full_response += extra
         except Exception as e:
-            logger.error("chat_stream failed for session %s", session_id, exc_info=True)
-            full_response = "Sorry, I encountered an error while processing your request."
+            logger.error("chat_stream failed for session %s: %s", session_id, str(e), exc_info=True)
+            full_response = f"Sorry, I encountered an error while processing your request: {e}"
             yield full_response
         finally:
             history = self._get_session_history(session_id)

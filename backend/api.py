@@ -134,9 +134,9 @@ def chat_endpoint(request: ChatRequest):
         try:
             for response in chatbot.chat_stream(session_id=request.session_id, query=request.query):
                 yield response
-        except Exception:
-            logger.error("Unhandled error in chat stream for session %s", request.session_id, exc_info=True)
-            yield "Sorry, I encountered an error while processing your request."
+        except Exception as e:
+            logger.error("Unhandled error in chat stream for session %s: %s", request.session_id, str(e), exc_info=True)
+            yield f"Sorry, I encountered an error while processing your request: {e}"
 
     return StreamingResponse(iterate_responses(), media_type="text/plain")
     

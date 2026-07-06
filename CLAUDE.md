@@ -75,7 +75,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## Project: Office Helper / Assistant
 
-A per-session document assistant: each chat session works with the PDFs uploaded into it —
+A per-session document assistant: each chat session works with the PDFs, Excel Sheets, Words etc. uploaded into it —
 answering questions, extracting information, and generating summaries, presentations, Word
 documents, and PDFs from that session's own documents. There is no shared/global knowledge
 base — every session's documents and vector store are isolated from every other session's.
@@ -119,10 +119,12 @@ backend/chatbot.py  ChatbotManager
     │         tools defined in tools.py: web_search, generate_presentation,
     │         generate_word_document, generate_pdf_document, search_documents
     │         memory: SqliteSaver checkpointer keyed by thread_id = session_id
-    ├── search_documents: queries ONLY the active session's own Chroma vector
-    │         store (chroma_db/sessions/{session_id}/) ← populated by uploads
-    │         to that session (documents/sessions/{session_id}/). No global/
-    │         shared document store — every session's documents are isolated.
+    ├── search_documents: queries a single shared Chroma collection
+    │         (chroma_db/shared/) ← populated by uploads to each session
+    │         (documents/sessions/{session_id}/). Every chunk is tagged with
+    │         session_id/document_name/user_id metadata; isolation between
+    │         sessions is enforced via a session_id filter on every query
+    │         (optionally narrowed further to one document via document_name).
     └── Session history: SQLite (test_history.db) via SQLChatMessageHistory
 ```
 

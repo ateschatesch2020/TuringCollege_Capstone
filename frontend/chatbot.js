@@ -552,7 +552,7 @@ class ChatBot {
         const statusEl = widget.querySelector(".file-select-status");
         let filteredPaths = paths;
         try {
-          const docsRes = await fetch(`${this.API_URL}/documents`);
+          const docsRes = await fetch(`${this.API_URL}/documents?session_id=${encodeURIComponent(this.pendingSessionId)}`);
           const docsData = await docsRes.json();
           const indexed = new Set(docsData.documents || []);
           filteredPaths = paths.filter(p => !indexed.has(p.split(/[/\\]/).pop()));

@@ -14,7 +14,7 @@ import sys
 import os
 import unittest
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, ANY
 
 
 def _parse_sse(text):
@@ -56,9 +56,9 @@ class TestDeleteDocument(unittest.TestCase):
         mock_chroma_cls.return_value = mock_vs
 
         from rag.rag_vector_db import delete_document
-        result = delete_document("/docs/test.pdf", "/chroma")
+        result = delete_document("/docs/test.pdf", "sess-1", "/chroma")
 
-        mock_vs.get.assert_called_once_with(where={"source": "/docs/test.pdf"})
+        mock_vs.get.assert_called_once_with(where={"$and": [{"session_id": "sess-1"}, {"source": "/docs/test.pdf"}]})
         mock_vs.delete.assert_called_once_with(["id1", "id2", "id3"])
         self.assertEqual(result, 3)
 
@@ -70,7 +70,7 @@ class TestDeleteDocument(unittest.TestCase):
         mock_chroma_cls.return_value = mock_vs
 
         from rag.rag_vector_db import delete_document
-        result = delete_document("/docs/missing.pdf", "/chroma")
+        result = delete_document("/docs/missing.pdf", "sess-1", "/chroma")
 
         mock_vs.delete.assert_not_called()
         self.assertEqual(result, 0)
@@ -83,7 +83,64 @@ class TestDeleteDocument(unittest.TestCase):
         mock_chroma_cls.return_value = mock_vs
 
         from rag.rag_vector_db import delete_document
-        self.assertEqual(delete_document("/docs/other.pdf", "/chroma"), 2)
+        self.assertEqual(delete_document("/docs/other.pdf", "sess-1", "/chroma"), 2)
+
+
+# ---------------------------------------------------------------------------
+# add_document_for_session
+# ---------------------------------------------------------------------------
+
+class TestAddDocumentForSession(unittest.TestCase):
+
+    @patch("rag.rag_vector_db.delete_document")
+    @patch("rag.rag_vector_db.Chroma")
+    @patch("rag.rag_vector_db.SemanticChunker")
+    @patch("rag.rag_vector_db._load_pdf")
+    @patch("rag.rag_vector_db._get_embedding_model")
+    def test_deletes_existing_chunks_before_adding_new_ones(
+        self, mock_emb, mock_load_pdf, mock_chunker_cls, mock_chroma_cls, mock_delete
+    ):
+        from langchain_core.documents import Document
+        mock_load_pdf.return_value = [Document(page_content="text", metadata={"source": "/docs/test.pdf"})]
+        mock_chunker = MagicMock()
+        mock_chunker.split_documents.return_value = [Document(page_content="chunk1")]
+        mock_chunker_cls.return_value = mock_chunker
+        mock_vs = MagicMock()
+        mock_chroma_cls.return_value = mock_vs
+
+        from rag.rag_vector_db import add_document_for_session
+        result = add_document_for_session("/docs/test.pdf", "sess-1")
+
+        mock_delete.assert_called_once_with("/docs/test.pdf", "sess-1", ANY)
+        mock_vs.add_documents.assert_called_once()
+        self.assertEqual(result, 1)
+
+    @patch("rag.rag_vector_db.delete_document")
+    @patch("rag.rag_vector_db.Chroma")
+    @patch("rag.rag_vector_db.SemanticChunker")
+    @patch("rag.rag_vector_db._load_pdf")
+    @patch("rag.rag_vector_db._get_embedding_model")
+    def test_skips_delete_and_add_when_cancelled(
+        self, mock_emb, mock_load_pdf, mock_chunker_cls, mock_chroma_cls, mock_delete
+    ):
+        from langchain_core.documents import Document
+        import threading
+        mock_load_pdf.return_value = [Document(page_content="text", metadata={"source": "/docs/test.pdf"})]
+        mock_chunker = MagicMock()
+        mock_chunker.split_documents.return_value = [Document(page_content="chunk1")]
+        mock_chunker_cls.return_value = mock_chunker
+        mock_vs = MagicMock()
+        mock_chroma_cls.return_value = mock_vs
+
+        cancel_event = threading.Event()
+        cancel_event.set()
+
+        from rag.rag_vector_db import add_document_for_session
+        result = add_document_for_session("/docs/test.pdf", "sess-1", cancel_event=cancel_event)
+
+        mock_delete.assert_not_called()
+        mock_vs.add_documents.assert_not_called()
+        self.assertEqual(result, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +184,17 @@ class TestListDocumentsEndpoint(unittest.TestCase):
     def test_requires_session_id(self):
         res = client.get("/documents")
         self.assertEqual(res.status_code, 422)
+
+    def test_returns_count_matching_documents_length(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "test-session")
+            os.makedirs(session_dir)
+            open(os.path.join(session_dir, "guide.pdf"), "w").close()
+            open(os.path.join(session_dir, "policy.pdf"), "w").close()
+            with patch("api._SESSION_DOCS_DIR", tmpdir):
+                res = client.get("/documents", params={"session_id": "test-session"})
+
+        self.assertEqual(res.json()["count"], 2)
 
 
 # ---------------------------------------------------------------------------

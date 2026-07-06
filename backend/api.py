@@ -25,9 +25,10 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from chatbot import ChatbotManager
 from chatform import FormManager
+from tools import list_session_documents
 from rag.rag_vector_db import (delete_document,
                                add_document_for_session, delete_session_vectorstore,
-                               get_session_persist_dir)
+                               get_shared_persist_dir)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pathlib import Path
@@ -148,11 +149,8 @@ def get_token_usage(session_id: str):
 
 @app.get("/documents")
 def list_documents(session_id: str):
-    folder = os.path.join(_SESSION_DOCS_DIR, session_id)
-    if not os.path.isdir(folder):
-        return {"documents": []}
-    files = sorted(f for f in os.listdir(folder) if f.lower().endswith(".pdf"))
-    return {"documents": files}
+    files = list_session_documents(_SESSION_DOCS_DIR, session_id)
+    return {"documents": files, "count": len(files)}
 
 
 @app.post("/documents/upload")
@@ -163,6 +161,7 @@ async def upload_document(request: Request, file: UploadFile = File(...), sessio
     os.makedirs(session_docs_dir, exist_ok=True)
     file_path = os.path.join(session_docs_dir, file.filename)
     content = await file.read()
+    user_id = chatbot.get_user_id_for_session(session_id)
 
     async def event_stream():
         cancel_event = threading.Event()
@@ -174,7 +173,7 @@ async def upload_document(request: Request, file: UploadFile = File(...), sessio
             yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30})}\n\n"
 
             add_task = asyncio.create_task(
-                asyncio.to_thread(add_document_for_session, file_path, session_id, cancel_event=cancel_event)
+                asyncio.to_thread(add_document_for_session, file_path, session_id, user_id=user_id, cancel_event=cancel_event)
             )
 
             while not add_task.done():
@@ -231,6 +230,7 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
         raise HTTPException(status_code=400, detail=f"No valid PDF paths. {'; '.join(errors)}")
 
     session_id = body.session_id
+    user_id = chatbot.get_user_id_for_session(session_id)
 
     async def event_stream():
         total = len(valid_paths)
@@ -245,7 +245,7 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
                 shutil.copy2(src_path, dest_path)
                 yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
                 add_task = asyncio.create_task(
-                    asyncio.to_thread(add_document_for_session, dest_path, session_id, cancel_event)
+                    asyncio.to_thread(add_document_for_session, dest_path, session_id, user_id=user_id, cancel_event=cancel_event)
                 )
 
                 while not add_task.done():
@@ -318,11 +318,11 @@ def download_generated_file(filename: str):
 @app.delete("/documents/{filename}")
 def delete_document_endpoint(filename: str, session_id: str):
     file_path = os.path.join(_SESSION_DOCS_DIR, session_id, filename)
-    persist_dir = get_session_persist_dir(session_id)
+    persist_dir = get_shared_persist_dir()
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
     try:
-        removed = delete_document(file_path, persist_dir)
+        removed = delete_document(file_path, session_id, persist_dir)
         os.remove(file_path)
         logger.info("Deleted %s (%d chunks removed from ChromaDB)", filename, removed)
         return {"filename": filename, "chunks_removed": removed}
@@ -335,7 +335,7 @@ def delete_document_endpoint(filename: str, session_id: str):
 async def evaluate_endpoint(request: EvaluateRequest):
     from rag.ragas_evaluator import evaluate_document
     file_path = os.path.join(_SESSION_DOCS_DIR, request.session_id, request.filename)
-    persist_dir = get_session_persist_dir(request.session_id)
+    persist_dir = get_shared_persist_dir()
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
 

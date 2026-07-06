@@ -4,6 +4,7 @@ import os
 import re
 import time
 import uuid
+from typing import Optional, List
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from langchain_chroma import Chroma
@@ -457,22 +458,53 @@ def search_files_with_progress(
     yield ("done", {"exact": exact_found, "contains": contains_found})
 
 
-def make_document_search_tool(embedding_model, sessions_dir: str):
+def list_session_documents(session_docs_dir: str, session_id: str) -> List[str]:
+    """Returns the sorted list of uploaded PDF filenames for a session, or [] if the
+    session has no documents folder yet. Shared by GET /documents (api.py) and the
+    list_uploaded_documents agent tool, so both report the same filenames."""
+    folder = os.path.join(session_docs_dir, session_id)
+    if not os.path.isdir(folder):
+        return []
+    return sorted(f for f in os.listdir(folder) if f.lower().endswith(".pdf"))
+
+
+def make_list_documents_tool(session_docs_dir: str):
     @tool
-    def search_documents(query: str, config: RunnableConfig) -> str:
+    def list_uploaded_documents(config: RunnableConfig) -> str:
+        """List the documents uploaded in this chat session: reports how many there are
+        and their exact filenames. Use this to answer questions like "how many documents
+        are uploaded" or "what are the document names", and to look up a document's exact
+        filename before passing it as the document_name filter to search_documents or
+        hybrid_search_documents.
+        """
+        session_id = (config.get("configurable") or {}).get("thread_id")
+        if not session_id:
+            return "No session found; cannot list documents."
+        names = list_session_documents(session_docs_dir, session_id)
+        if not names:
+            return "This session has no uploaded documents yet."
+        return f"This session has {len(names)} uploaded document(s): {', '.join(names)}."
+    return list_uploaded_documents
+
+
+def make_document_search_tool(embedding_model, persist_dir: str):
+    @tool
+    def search_documents(query: str, config: RunnableConfig, document_name: Optional[str] = None) -> str:
         """Search the documents uploaded in this chat session for information.
         Use this for ANY question about content in uploaded documents — product details, pricing,
         procedures, policies, project information, or any other document content.
         Always search documents before answering questions about document-specific information.
+        document_name: optional. If the user refers to one specific uploaded document by its
+        exact filename (e.g. "policy.pdf"), pass it here to restrict the search to only that
+        document. Omit it to search across all documents uploaded in this session.
         """
         session_id = (config.get("configurable") or {}).get("thread_id")
         if not session_id:
             return "No relevant information found in uploaded documents."
-        session_dir = os.path.join(sessions_dir, session_id)
-        if not os.path.exists(session_dir):
-            return "No relevant information found in uploaded documents."
-        session_vs = Chroma(persist_directory=session_dir, embedding_function=embedding_model)
-        docs = session_vs.as_retriever(search_kwargs={"k": 2}).invoke(query)
+        where = {"session_id": session_id} if not document_name else \
+            {"$and": [{"session_id": session_id}, {"document_name": document_name}]}
+        vectorstore = Chroma(persist_directory=persist_dir, embedding_function=embedding_model)
+        docs = vectorstore.as_retriever(search_kwargs={"k": 2, "filter": where}).invoke(query)
         return "\n\n".join(d.page_content for d in docs) if docs else "No relevant information found in uploaded documents."
     return search_documents
 
@@ -553,25 +585,27 @@ def hybrid_retrieve(vectorstore, query: str, llm, k: int = 5, candidate_k: int =
     return combined[:k] if len(combined) <= k else _llm_rerank(llm, query, combined, k=k)
 
 
-def make_hybrid_search_tool(embedding_model, llm, sessions_dir: str):
+def make_hybrid_search_tool(embedding_model, llm, persist_dir: str):
     @tool
-    def hybrid_search_documents(query: str, config: RunnableConfig) -> str:
+    def hybrid_search_documents(query: str, config: RunnableConfig, document_name: Optional[str] = None) -> str:
         """Hybrid search over this session's uploaded documents: runs semantic and keyword
         search separately, merges the results, and re-ranks them with an LLM before returning
         the top 5 chunks. Slower than search_documents but more thorough — use it when
         search_documents doesn't surface enough relevant content, or when the query includes
         exact terms, names, codes, or numbers that need precise keyword matching alongside
         semantic matching.
+        document_name: optional. If the user refers to one specific uploaded document by its
+        exact filename (e.g. "policy.pdf"), pass it here to restrict the search to only that
+        document. Omit it to search across all documents uploaded in this session.
         """
         session_id = (config.get("configurable") or {}).get("thread_id")
         if not session_id:
             return "No relevant information found in uploaded documents."
-        session_dir = os.path.join(sessions_dir, session_id)
-        if not os.path.exists(session_dir):
-            return "No relevant information found in uploaded documents."
-        session_vs = Chroma(persist_directory=session_dir, embedding_function=embedding_model)
+        where = {"session_id": session_id} if not document_name else \
+            {"$and": [{"session_id": session_id}, {"document_name": document_name}]}
+        vectorstore = Chroma(persist_directory=persist_dir, embedding_function=embedding_model)
 
-        top = hybrid_retrieve(session_vs, query, llm, k=5, candidate_k=10)
+        top = hybrid_retrieve(vectorstore, query, llm, k=5, candidate_k=10, filter=where)
         if not top:
             return "No relevant information found in uploaded documents."
         return "\n\n".join(d.page_content for d in top)

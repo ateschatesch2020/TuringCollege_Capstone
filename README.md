@@ -1,4 +1,4 @@
-# Office Helper Assistant
+# Smart document search system
 
 A per-session document assistant: each chat session works with the PDFs uploaded into it —
 answering questions, extracting information, and generating summaries, presentations, Word

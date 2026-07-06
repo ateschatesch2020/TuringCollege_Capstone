@@ -8,7 +8,8 @@ import json
 import uuid
 import sqlite3
 import tools
-from tools import make_document_search_tool, make_hybrid_search_tool
+from tools import make_document_search_tool, make_hybrid_search_tool, make_list_documents_tool
+from rag.rag_vector_db import get_shared_persist_dir
 from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
@@ -82,16 +83,18 @@ class ChatbotManager:
             api_key=os.getenv("OPENROUTER_API_KEY"))
         self._init_session_db()
 
-        sessions_dir = os.path.join(_root, "chroma_db", "sessions")
+        persist_dir = get_shared_persist_dir()
+        session_docs_dir = os.path.join(_root, "documents", "sessions")
         self.tools.append(make_document_search_tool(
             embedding_model=self.embedding_model,
-            sessions_dir=sessions_dir,
+            persist_dir=persist_dir,
         ))
         self.tools.append(make_hybrid_search_tool(
             embedding_model=self.embedding_model,
             llm=self.model,
-            sessions_dir=sessions_dir,
+            persist_dir=persist_dir,
         ))
+        self.tools.append(make_list_documents_tool(session_docs_dir=session_docs_dir))
         self.llm_with_tools = self.model.bind_tools(self.tools)
 
         worker_llm = self.model
@@ -100,19 +103,6 @@ class ChatbotManager:
         self.evaluator_llm_with_output = evaluator_llm.with_structured_output(EvaluatorOutput)
         
         self.checkpointer = MemorySaver()
-
-        self.agent_prompt = """
-        You are an Office Helper assistant. Help users work with their company documents and create professional outputs.
-        You have tools to search uploaded documents, search the web, and generate presentations, Word documents, and PDF files.
-
-        CRITICAL RULES:
-        - For ANY question about uploaded documents, ALWAYS use the search_documents tool first before answering.
-        - For current information not available in uploaded documents, use web_search.
-        - When the user requests a presentation, Word document, or PDF file, use the appropriate generation tool and include the download link in your response.
-        - For checklists, comparison tables, or price lists shown in chat, generate them as formatted markdown — no file tool needed unless the user asks for a downloadable file.
-        - NEVER invent document content. Only use what search_documents returns.
-        - Reply in the user's language.
-        """
 
         graph_builder = StateGraph(State)
 
@@ -219,6 +209,14 @@ class ChatbotManager:
             ''', (user_id,))
             sessions = cursor.fetchall()
         return [dict(session) for session in sessions]
+
+    def get_user_id_for_session(self, session_id: str) -> Optional[str]:
+        """Looks up the user_id associated with a session_id from chat_sessions."""
+        with sqlite3.connect(self.db_file_path) as conn:
+            row = conn.execute(
+                'SELECT user_id FROM chat_sessions WHERE session_id = ?', (session_id,)
+            ).fetchone()
+        return row[0] if row else None
 
     def update_session_title(self, session_id: str, new_title: str):
         with sqlite3.connect(self.db_file_path) as conn:
@@ -356,6 +354,10 @@ class ChatbotManager:
           search separately, merges the results, and re-ranks them with an LLM before returning the top 5 chunks.
           - Use it when search_documents doesn't return enough relevant information.
           - Use it when the query needs precise keyword matches (exact names, codes, numbers) alongside semantic matching.
+
+        • list_uploaded_documents: Use to answer "how many documents are uploaded" or "what are their names" questions,
+          and to look up a document's exact filename before using it as the document_name filter on
+          search_documents/hybrid_search_documents.
 
         • web_search: Use when the question requires current, real-time, or up-to-date information that cannot be in uploaded documents.
           - News, prices, weather, live schedules, recent events → web_search.

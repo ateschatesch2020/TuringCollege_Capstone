@@ -72,7 +72,7 @@ class ChatbotManager:
         self.connection_string = f"sqlite:///{self.db_file_path}"
         self.model = ChatOpenRouter(
             model=self.model_name)
-        self.tools = tools.Tools.tools[:]
+        self.tools = tools.Tools.tools[:] 
 
         # self.embedding_model = HuggingFaceEmbeddings(
         #   model="sentence-transformers/all-MiniLM-L6-v2")

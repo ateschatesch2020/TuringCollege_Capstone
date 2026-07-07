@@ -1,3 +1,5 @@
+import { iconForFile } from "../../lib/fileTypes";
+
 interface DocumentListItemProps {
   name: string;
   onEvaluate: () => void;
@@ -8,7 +10,7 @@ export default function DocumentListItem({ name, onEvaluate, onDelete }: Documen
   return (
     <div className="flex items-center justify-between text-xs text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-50 group">
       <span className="truncate">
-        <i className="fa-solid fa-file-pdf text-red-400 mr-1.5"></i>
+        <i className={`fa-solid ${iconForFile(name)} text-red-400 mr-1.5`}></i>
         {name}
       </span>
       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all ml-1">

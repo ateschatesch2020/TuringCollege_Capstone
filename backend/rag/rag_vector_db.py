@@ -1,5 +1,8 @@
 import threading
 import pymupdf4llm
+import openpyxl
+from docx import Document as DocxDocument
+from pptx import Presentation
 from langchain_core.documents import Document
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import OpenAIEmbeddings
@@ -19,10 +22,75 @@ def _get_embedding_model():
         api_key=os.getenv("OPENROUTER_API_KEY"))
 
 
-def _load_pdf(file_path: str) -> list[Document]:
+def _load_pdf(file_path: str) -> str:
     """Convert PDF to Markdown via pymupdf4llm, preserving list and heading structure."""
-    md_text = pymupdf4llm.to_markdown(file_path)
-    return [Document(page_content=md_text, metadata={"source": file_path})]
+    return pymupdf4llm.to_markdown(file_path)
+
+
+def _load_docx(file_path: str) -> str:
+    """Extract paragraph and table text from a Word document."""
+    doc = DocxDocument(file_path)
+    parts = [p.text for p in doc.paragraphs if p.text.strip()]
+    for table in doc.tables:
+        for row in table.rows:
+            parts.append(" | ".join(cell.text for cell in row.cells))
+    return "\n".join(parts)
+
+
+def _load_pptx(file_path: str) -> str:
+    """Extract slide text from a PowerPoint presentation, one sentence-terminated block per slide."""
+    prs = Presentation(file_path)
+    parts = []
+    for i, slide in enumerate(prs.slides, 1):
+        texts = [
+            shape.text_frame.text for shape in slide.shapes
+            if shape.has_text_frame and shape.text_frame.text.strip()
+        ]
+        if texts:
+            parts.append(f"Slide {i}: " + ". ".join(texts) + ".")
+    return "\n".join(parts)
+
+
+def _load_xlsx(file_path: str) -> str:
+    """Extract cell text from an Excel workbook, one sentence-terminated block per row."""
+    wb = openpyxl.load_workbook(file_path, data_only=True)
+    parts = []
+    for sheet in wb.worksheets:
+        parts.append(f"Sheet: {sheet.title}.")
+        for row in sheet.iter_rows(values_only=True):
+            if any(cell is not None for cell in row):
+                parts.append(" | ".join("" if cell is None else str(cell) for cell in row) + ".")
+    return "\n".join(parts)
+
+
+def _load_text(file_path: str) -> str:
+    """Read a plain text or Markdown file as-is."""
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+_LOADERS = {
+    ".pdf": _load_pdf,
+    ".docx": _load_docx,
+    ".pptx": _load_pptx,
+    ".xlsx": _load_xlsx,
+    ".txt": _load_text,
+    ".md": _load_text,
+}
+
+SUPPORTED_EXTENSIONS = set(_LOADERS)
+
+
+def _load_document(file_path: str) -> list[Document]:
+    """Dispatch to the loader for this file's extension and wrap the extracted text in a Document."""
+    ext = os.path.splitext(file_path)[1].lower()
+    loader = _LOADERS.get(ext)
+    if loader is None:
+        raise ValueError(f"Unsupported file type: {ext}")
+    text = loader(file_path)
+    if not text.strip():
+        raise ValueError(f"No text could be extracted from {os.path.basename(file_path)}")
+    return [Document(page_content=text, metadata={"source": file_path})]
 
 
 def delete_document(file_path: str, session_id: str, persist_directory: str) -> int:
@@ -41,10 +109,10 @@ def get_shared_persist_dir() -> str:
 
 def add_document_for_session(file_path: str, session_id: str, user_id: str = None,
                              cancel_event: threading.Event = None) -> int:
-    """Embed a PDF into the shared ChromaDB, tagged with session_id/document_name/user_id metadata. Returns chunk count."""
+    """Embed a document into the shared ChromaDB, tagged with session_id/document_name/user_id metadata. Returns chunk count."""
     os.makedirs(_SHARED_DIR, exist_ok=True)
 
-    docs = _load_pdf(file_path)
+    docs = _load_document(file_path)
     docs[0].metadata["session_id"] = session_id
     docs[0].metadata["document_name"] = os.path.basename(file_path)
     if user_id:

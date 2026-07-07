@@ -28,3 +28,11 @@ chroma_db/
 
 # Logs
 app.log
+
+# Runtime artifacts
+backend/generated_files/
+documents/sessions/
+test_history.db
+test_history.db-shm
+test_history.db-wal
+tmpxswazj50.png

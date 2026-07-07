@@ -16,15 +16,16 @@ from tools import list_session_documents, make_list_documents_tool
 
 class TestListSessionDocuments(unittest.TestCase):
 
-    def test_returns_sorted_pdfs_only(self):
+    def test_returns_sorted_supported_documents_only(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session_dir = os.path.join(tmpdir, "sess1")
             os.makedirs(session_dir)
             open(os.path.join(session_dir, "b.pdf"), "w").close()
             open(os.path.join(session_dir, "a.pdf"), "w").close()
             open(os.path.join(session_dir, "notes.txt"), "w").close()
+            open(os.path.join(session_dir, "archive.zip"), "w").close()
             result = list_session_documents(tmpdir, "sess1")
-        self.assertEqual(result, ["a.pdf", "b.pdf"])
+        self.assertEqual(result, ["a.pdf", "b.pdf", "notes.txt"])
 
     def test_returns_empty_list_when_session_dir_missing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -60,16 +61,18 @@ class TestListUploadedDocumentsTool(unittest.TestCase):
         self.assertIn("policy.pdf", result)
         self.assertIn("guide.pdf", result)
 
-    def test_filters_out_non_pdf_files(self):
+    def test_filters_out_unsupported_files(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session_dir = os.path.join(tmpdir, "sess1")
             os.makedirs(session_dir)
             open(os.path.join(session_dir, "policy.pdf"), "w").close()
             open(os.path.join(session_dir, "readme.txt"), "w").close()
+            open(os.path.join(session_dir, "archive.zip"), "w").close()
             tool_obj = make_list_documents_tool(session_docs_dir=tmpdir)
             result = self._invoke(tool_obj, session_id="sess1")
-        self.assertIn("1 uploaded document(s)", result)
-        self.assertNotIn("readme.txt", result)
+        self.assertIn("2 uploaded document(s)", result)
+        self.assertIn("readme.txt", result)
+        self.assertNotIn("archive.zip", result)
 
 
 if __name__ == "__main__":

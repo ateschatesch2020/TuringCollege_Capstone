@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()
 import serpapi
 
+from rag.rag_vector_db import SUPPORTED_EXTENSIONS
+
 logger = logging.getLogger(__name__)
 
 _GENERATED_FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_files")
@@ -33,16 +35,16 @@ def _file_size_str(path: str) -> str:
 
 
 def _build_file_select_block(paths: list) -> str:
-    """Returns a ```file-select JSON block for PDF files (max 10), or empty string.
-    If a path is a directory, walks into it to collect PDFs."""
+    """Returns a ```file-select JSON block for supported document files (max 10), or empty string.
+    If a path is a directory, walks into it to collect supported files."""
     collected = []
     for p in paths:
         if os.path.isdir(p):
             for root, _, files in os.walk(p):
                 for f in files:
-                    if f.lower().endswith(".pdf"):
+                    if os.path.splitext(f)[1].lower() in SUPPORTED_EXTENSIONS:
                         collected.append(os.path.join(root, f))
-        elif p.lower().endswith(".pdf"):
+        elif os.path.splitext(p)[1].lower() in SUPPORTED_EXTENSIONS:
             collected.append(p)
     pdf_paths = collected[:10]
     if not pdf_paths:
@@ -459,13 +461,13 @@ def search_files_with_progress(
 
 
 def list_session_documents(session_docs_dir: str, session_id: str) -> List[str]:
-    """Returns the sorted list of uploaded PDF filenames for a session, or [] if the
+    """Returns the sorted list of uploaded document filenames for a session, or [] if the
     session has no documents folder yet. Shared by GET /documents (api.py) and the
     list_uploaded_documents agent tool, so both report the same filenames."""
     folder = os.path.join(session_docs_dir, session_id)
     if not os.path.isdir(folder):
         return []
-    return sorted(f for f in os.listdir(folder) if f.lower().endswith(".pdf"))
+    return sorted(f for f in os.listdir(folder) if os.path.splitext(f)[1].lower() in SUPPORTED_EXTENSIONS)
 
 
 def make_list_documents_tool(session_docs_dir: str):

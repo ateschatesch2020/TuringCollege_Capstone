@@ -32,12 +32,12 @@ class TestEvaluateDocumentHybridSection(unittest.TestCase):
     @patch("rag.ragas_evaluator._score_faithfulness", new_callable=AsyncMock)
     @patch("rag.ragas_evaluator.hybrid_retrieve")
     @patch("rag.ragas_evaluator.generate_qa_pairs", new_callable=AsyncMock)
-    @patch("rag.ragas_evaluator._load_pdf")
+    @patch("rag.ragas_evaluator._load_document")
     @patch("rag.ragas_evaluator._get_embedding_model")
     @patch("rag.ragas_evaluator.Chroma")
     @patch("rag.ragas_evaluator._get_llm")
     def test_result_includes_independent_hybrid_section(
-        self, mock_get_llm, mock_chroma_cls, mock_get_emb, mock_load_pdf,
+        self, mock_get_llm, mock_chroma_cls, mock_get_emb, mock_load_document,
         mock_gen_qa, mock_hybrid_retrieve,
         mock_score_faithfulness, mock_score_relevancy, mock_score_precision, mock_score_recall,
     ):
@@ -48,7 +48,7 @@ class TestEvaluateDocumentHybridSection(unittest.TestCase):
         ])
         mock_get_llm.return_value = llm
 
-        mock_load_pdf.return_value = [Document(page_content="full document text")]
+        mock_load_document.return_value = [Document(page_content="full document text")]
         mock_gen_qa.return_value = [{"question": "What is X?", "answer": "X is Y"}]
 
         mock_vectorstore = MagicMock()

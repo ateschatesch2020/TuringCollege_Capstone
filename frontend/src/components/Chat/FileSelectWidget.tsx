@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useDocuments } from "../../hooks/useDocuments";
 import { useIngestPaths } from "../../hooks/useIngestPaths";
 import { formatFileSize, estimateUploadTime } from "../../lib/format";
+import { isSupportedFile, iconForFile } from "../../lib/fileTypes";
 import type { FileSelectEntry } from "../../types";
 
 interface FileSelectWidgetProps {
@@ -42,22 +43,22 @@ export default function FileSelectWidget({ files, sessionId }: FileSelectWidgetP
       </div>
       <div className="space-y-0.5">
         {files.map((f) => {
-          const isPdf = f.name.toLowerCase().endsWith(".pdf");
+          const isSupported = isSupportedFile(f.name);
           return (
             <label
               key={f.path}
               className={`flex items-center gap-2 py-1 px-1 rounded hover:bg-blue-100 cursor-pointer ${
-                isPdf ? "" : "opacity-40"
+                isSupported ? "" : "opacity-40"
               }`}
             >
               <input
                 type="checkbox"
-                disabled={!isPdf}
-                title={isPdf ? undefined : "Only PDF files can be uploaded"}
+                disabled={!isSupported}
+                title={isSupported ? undefined : "This file type can't be uploaded"}
                 checked={checked.has(f.path)}
                 onChange={() => toggle(f.path)}
               />
-              <i className="fa-solid fa-file-pdf text-red-400 text-xs flex-shrink-0"></i>
+              <i className={`fa-solid ${iconForFile(f.name)} text-red-400 text-xs flex-shrink-0`}></i>
               <span className="text-xs text-gray-700 truncate flex-1">{f.name}</span>
               <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
                 {formatFileSize(f.size_bytes)} · {estimateUploadTime(f.size_bytes)}

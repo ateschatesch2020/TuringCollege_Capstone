@@ -28,7 +28,7 @@ from chatform import FormManager
 from tools import list_session_documents
 from rag.rag_vector_db import (delete_document,
                                add_document_for_session, delete_session_vectorstore,
-                               get_shared_persist_dir)
+                               get_shared_persist_dir, SUPPORTED_EXTENSIONS)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pathlib import Path
@@ -155,8 +155,8 @@ def list_documents(session_id: str):
 
 @app.post("/documents/upload")
 async def upload_document(request: Request, file: UploadFile = File(...), session_id: str = Form(...)):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    if os.path.splitext(file.filename)[1].lower() not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type. Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")
     session_docs_dir = os.path.join(_SESSION_DOCS_DIR, session_id)
     os.makedirs(session_docs_dir, exist_ok=True)
     file_path = os.path.join(session_docs_dir, file.filename)
@@ -218,8 +218,8 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
         if not (abs_p == abs_projects or abs_p.startswith(abs_projects_prefix)):
             errors.append(f"Access denied: {p}")
             continue
-        if not p.lower().endswith(".pdf"):
-            errors.append(f"Not a PDF: {p}")
+        if os.path.splitext(p)[1].lower() not in SUPPORTED_EXTENSIONS:
+            errors.append(f"Unsupported file type: {p}")
             continue
         if not os.path.isfile(abs_p):
             errors.append(f"File not found: {p}")
@@ -227,7 +227,7 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
         valid_paths.append(abs_p)
 
     if not valid_paths:
-        raise HTTPException(status_code=400, detail=f"No valid PDF paths. {'; '.join(errors)}")
+        raise HTTPException(status_code=400, detail=f"No valid paths. {'; '.join(errors)}")
 
     session_id = body.session_id
     user_id = chatbot.get_user_id_for_session(session_id)

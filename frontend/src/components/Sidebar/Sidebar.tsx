@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { useSessionContext } from "../../context/SessionContext.tsx";
 import { useDocumentsContext } from "../../context/DocumentsContext.tsx";
 import { useUploadDocument } from "../../hooks/useUploadDocument";
+import { SUPPORTED_EXTENSIONS } from "../../lib/fileTypes";
 import SessionList from "./SessionList.tsx";
 import DocumentList from "./DocumentList.tsx";
 import UploadProgress from "./UploadProgress.tsx";
@@ -45,7 +46,7 @@ export default function Sidebar({ onNewChat }: SidebarProps) {
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Documents</span>
           <button
             onClick={() => fileInputRef.current?.click()}
-            title="Upload PDF"
+            title="Upload document"
             className="text-gray-400 hover:text-blue-600 transition-colors p-1 rounded"
           >
             <i className="fa-solid fa-upload text-xs"></i>
@@ -54,7 +55,7 @@ export default function Sidebar({ onNewChat }: SidebarProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf"
+          accept={SUPPORTED_EXTENSIONS.join(",")}
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];

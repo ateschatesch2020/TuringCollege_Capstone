@@ -9,7 +9,7 @@ from langchain_openai import ChatOpenAI
 
 load_dotenv()
 
-from .rag_vector_db import _get_embedding_model, _load_pdf
+from .rag_vector_db import _get_embedding_model, _load_document
 from tools import hybrid_retrieve
 
 
@@ -97,7 +97,7 @@ async def evaluate_document(
     llm = _get_llm()
     embeddings = _get_embedding_model()
 
-    docs = _load_pdf(file_path)
+    docs = _load_document(file_path)
     doc_content = "\n".join(d.page_content for d in docs)
 
     if progress_cb:

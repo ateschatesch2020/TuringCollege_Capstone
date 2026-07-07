@@ -95,13 +95,13 @@ class TestAddDocumentForSession(unittest.TestCase):
     @patch("rag.rag_vector_db.delete_document")
     @patch("rag.rag_vector_db.Chroma")
     @patch("rag.rag_vector_db.SemanticChunker")
-    @patch("rag.rag_vector_db._load_pdf")
+    @patch("rag.rag_vector_db._load_document")
     @patch("rag.rag_vector_db._get_embedding_model")
     def test_deletes_existing_chunks_before_adding_new_ones(
-        self, mock_emb, mock_load_pdf, mock_chunker_cls, mock_chroma_cls, mock_delete
+        self, mock_emb, mock_load_document, mock_chunker_cls, mock_chroma_cls, mock_delete
     ):
         from langchain_core.documents import Document
-        mock_load_pdf.return_value = [Document(page_content="text", metadata={"source": "/docs/test.pdf"})]
+        mock_load_document.return_value = [Document(page_content="text", metadata={"source": "/docs/test.pdf"})]
         mock_chunker = MagicMock()
         mock_chunker.split_documents.return_value = [Document(page_content="chunk1")]
         mock_chunker_cls.return_value = mock_chunker
@@ -118,14 +118,14 @@ class TestAddDocumentForSession(unittest.TestCase):
     @patch("rag.rag_vector_db.delete_document")
     @patch("rag.rag_vector_db.Chroma")
     @patch("rag.rag_vector_db.SemanticChunker")
-    @patch("rag.rag_vector_db._load_pdf")
+    @patch("rag.rag_vector_db._load_document")
     @patch("rag.rag_vector_db._get_embedding_model")
     def test_skips_delete_and_add_when_cancelled(
-        self, mock_emb, mock_load_pdf, mock_chunker_cls, mock_chroma_cls, mock_delete
+        self, mock_emb, mock_load_document, mock_chunker_cls, mock_chroma_cls, mock_delete
     ):
         from langchain_core.documents import Document
         import threading
-        mock_load_pdf.return_value = [Document(page_content="text", metadata={"source": "/docs/test.pdf"})]
+        mock_load_document.return_value = [Document(page_content="text", metadata={"source": "/docs/test.pdf"})]
         mock_chunker = MagicMock()
         mock_chunker.split_documents.return_value = [Document(page_content="chunk1")]
         mock_chunker_cls.return_value = mock_chunker
@@ -149,24 +149,25 @@ class TestAddDocumentForSession(unittest.TestCase):
 
 class TestListDocumentsEndpoint(unittest.TestCase):
 
-    def test_returns_sorted_pdfs_only(self):
+    def test_returns_sorted_supported_documents_only(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session_dir = os.path.join(tmpdir, "test-session")
             os.makedirs(session_dir)
             open(os.path.join(session_dir, "guide.pdf"), "w").close()
             open(os.path.join(session_dir, "policy.pdf"), "w").close()
             open(os.path.join(session_dir, "notes.txt"), "w").close()
+            open(os.path.join(session_dir, "archive.zip"), "w").close()
             with patch("api._SESSION_DOCS_DIR", tmpdir):
                 res = client.get("/documents", params={"session_id": "test-session"})
 
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()["documents"], ["guide.pdf", "policy.pdf"])
+        self.assertEqual(res.json()["documents"], ["guide.pdf", "notes.txt", "policy.pdf"])
 
-    def test_returns_empty_list_when_directory_has_no_pdfs(self):
+    def test_returns_empty_list_when_directory_has_no_supported_documents(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session_dir = os.path.join(tmpdir, "test-session")
             os.makedirs(session_dir)
-            open(os.path.join(session_dir, "readme.txt"), "w").close()
+            open(os.path.join(session_dir, "archive.zip"), "w").close()
             with patch("api._SESSION_DOCS_DIR", tmpdir):
                 res = client.get("/documents", params={"session_id": "test-session"})
 
@@ -235,14 +236,14 @@ class TestUploadDocumentEndpoint(unittest.TestCase):
         mock_add.assert_called_once()
         self.assertEqual(mock_add.call_args.args[1], "test-session")
 
-    def test_upload_rejects_non_pdf_with_400(self):
+    def test_upload_rejects_unsupported_type_with_400(self):
         res = client.post(
             "/documents/upload",
-            files={"file": ("notes.txt", b"text content", "text/plain")},
+            files={"file": ("archive.zip", b"zip content", "application/zip")},
             data={"session_id": "test-session"},
         )
         self.assertEqual(res.status_code, 400)
-        self.assertIn("PDF", res.json()["detail"])
+        self.assertIn("Unsupported file type", res.json()["detail"])
 
     def test_upload_requires_session_id(self):
         res = client.post(

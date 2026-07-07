@@ -1,6 +1,24 @@
 export interface Session {
   session_id: string;
   title: string;
+  model: string;
+  embedding_model: string;
+}
+
+export interface ModelOption {
+  id: string;
+  label: string;
+  provider_name: string;
+  type: "frontier" | "open_source";
+  size_gb: number | null;
+}
+
+export interface EmbeddingModelOption {
+  id: string;
+  label: string;
+  provider_name: string;
+  dimensions: number;
+  location: "api" | "local";
 }
 
 export interface ChatMessage {

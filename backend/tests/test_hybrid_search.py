@@ -174,7 +174,7 @@ class TestHybridSearchTool(unittest.TestCase):
         return tool_obj.invoke({"query": query}, config={"configurable": {"thread_id": session_id}})
 
     def test_returns_no_info_when_no_session_id(self):
-        tool_obj = make_hybrid_search_tool(embedding_model=MagicMock(), llm=MagicMock(), persist_dir="/tmp")
+        tool_obj = make_hybrid_search_tool(resolve_embedding=lambda session_id: (MagicMock(), "/tmp"), llm=MagicMock())
         result = tool_obj.invoke({"query": "hi"}, config={"configurable": {}})
         self.assertEqual(result, "No relevant information found in uploaded documents.")
 
@@ -186,7 +186,7 @@ class TestHybridSearchTool(unittest.TestCase):
             mock_vs.get.return_value = {"documents": [], "metadatas": []}
             mock_chroma_cls.return_value = mock_vs
 
-            tool_obj = make_hybrid_search_tool(embedding_model=MagicMock(), llm=MagicMock(), persist_dir=tmpdir)
+            tool_obj = make_hybrid_search_tool(resolve_embedding=lambda session_id: (MagicMock(), tmpdir), llm=MagicMock())
             result = self._invoke(tool_obj, "hi", session_id="nonexistent")
         self.assertEqual(result, "No relevant information found in uploaded documents.")
 
@@ -198,7 +198,7 @@ class TestHybridSearchTool(unittest.TestCase):
             mock_vs.get.return_value = {"documents": [], "metadatas": []}
             mock_chroma_cls.return_value = mock_vs
 
-            tool_obj = make_hybrid_search_tool(embedding_model=MagicMock(), llm=MagicMock(), persist_dir=tmpdir)
+            tool_obj = make_hybrid_search_tool(resolve_embedding=lambda session_id: (MagicMock(), tmpdir), llm=MagicMock())
             self._invoke(tool_obj, "hi", session_id="sess1")
 
         mock_vs.similarity_search.assert_called_once_with("hi", k=10, filter={"session_id": "sess1"})
@@ -211,7 +211,7 @@ class TestHybridSearchTool(unittest.TestCase):
             mock_vs.get.return_value = {"documents": [], "metadatas": []}
             mock_chroma_cls.return_value = mock_vs
 
-            tool_obj = make_hybrid_search_tool(embedding_model=MagicMock(), llm=MagicMock(), persist_dir=tmpdir)
+            tool_obj = make_hybrid_search_tool(resolve_embedding=lambda session_id: (MagicMock(), tmpdir), llm=MagicMock())
             tool_obj.invoke(
                 {"query": "hi", "document_name": "policy.pdf"},
                 config={"configurable": {"thread_id": "sess1"}},
@@ -229,7 +229,7 @@ class TestHybridSearchTool(unittest.TestCase):
             mock_chroma_cls.return_value = mock_vs
 
             llm = MagicMock()
-            tool_obj = make_hybrid_search_tool(embedding_model=MagicMock(), llm=llm, persist_dir=tmpdir)
+            tool_obj = make_hybrid_search_tool(resolve_embedding=lambda session_id: (MagicMock(), tmpdir), llm=llm)
             result = self._invoke(tool_obj, "chunk")
 
         llm.invoke.assert_not_called()
@@ -244,7 +244,7 @@ class TestHybridSearchTool(unittest.TestCase):
             mock_vs.get.return_value = {"documents": ["same chunk"], "metadatas": [{}]}
             mock_chroma_cls.return_value = mock_vs
 
-            tool_obj = make_hybrid_search_tool(embedding_model=MagicMock(), llm=MagicMock(), persist_dir=tmpdir)
+            tool_obj = make_hybrid_search_tool(resolve_embedding=lambda session_id: (MagicMock(), tmpdir), llm=MagicMock())
             result = self._invoke(tool_obj, "same chunk")
 
         self.assertEqual(result.count("same chunk"), 1)
@@ -262,7 +262,7 @@ class TestHybridSearchTool(unittest.TestCase):
 
             llm = MagicMock()
             llm.invoke.return_value = MagicMock(content="[0, 1, 2, 3, 4]")
-            tool_obj = make_hybrid_search_tool(embedding_model=MagicMock(), llm=llm, persist_dir=tmpdir)
+            tool_obj = make_hybrid_search_tool(resolve_embedding=lambda session_id: (MagicMock(), tmpdir), llm=llm)
             self._invoke(tool_obj, "sem kw")
 
         llm.invoke.assert_called_once()
@@ -275,7 +275,7 @@ class TestHybridSearchTool(unittest.TestCase):
             mock_vs.get.return_value = {"documents": [], "metadatas": []}
             mock_chroma_cls.return_value = mock_vs
 
-            tool_obj = make_hybrid_search_tool(embedding_model=MagicMock(), llm=MagicMock(), persist_dir=tmpdir)
+            tool_obj = make_hybrid_search_tool(resolve_embedding=lambda session_id: (MagicMock(), tmpdir), llm=MagicMock())
             result = self._invoke(tool_obj, "nothing")
 
         self.assertEqual(result, "No relevant information found in uploaded documents.")

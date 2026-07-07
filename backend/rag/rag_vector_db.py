@@ -14,12 +14,35 @@ load_dotenv()
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _PERSIST_DIR = os.path.join(_ROOT, "chroma_db")
 _SHARED_DIR = os.path.join(_PERSIST_DIR, "shared")
+_HF_DIR = os.path.join(_PERSIST_DIR, "huggingface")
 
 def _get_embedding_model():
     return OpenAIEmbeddings(
         model="openai/text-embedding-3-small",
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OPENROUTER_API_KEY"))
+
+
+def _get_huggingface_embedding_model():
+    from langchain_huggingface import HuggingFaceEmbeddings
+    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+
+def get_embedding_model(embedding_model_id: str | None):
+    """Resolve an embedding_model_id ('openai'/'huggingface'/None/unknown) to a LangChain
+    embeddings instance. Unknown or missing ids fall back to 'openai' for backward
+    compatibility with sessions created before this feature existed."""
+    if embedding_model_id == "huggingface":
+        return _get_huggingface_embedding_model()
+    return _get_embedding_model()
+
+
+def get_persist_dir_for_embedding(embedding_model_id: str | None) -> str:
+    """Resolve an embedding_model_id to its dedicated Chroma persist directory.
+    Unknown/None ids fall back to _SHARED_DIR (the pre-existing OpenAI store)."""
+    if embedding_model_id == "huggingface":
+        return _HF_DIR
+    return _SHARED_DIR
 
 
 def _load_pdf(file_path: str) -> str:
@@ -108,29 +131,35 @@ def get_shared_persist_dir() -> str:
 
 
 def add_document_for_session(file_path: str, session_id: str, user_id: str = None,
-                             cancel_event: threading.Event = None) -> int:
-    """Embed a document into the shared ChromaDB, tagged with session_id/document_name/user_id metadata. Returns chunk count."""
-    os.makedirs(_SHARED_DIR, exist_ok=True)
+                             cancel_event: threading.Event = None,
+                             embedding_model_id: str = None) -> int:
+    """Embed a document into the session's ChromaDB (chosen by embedding_model_id, defaulting
+    to the shared OpenAI store), tagged with session_id/document_name/user_id metadata.
+    Returns chunk count."""
+    persist_dir = get_persist_dir_for_embedding(embedding_model_id)
+    embedding_model = get_embedding_model(embedding_model_id)
+    os.makedirs(persist_dir, exist_ok=True)
 
     docs = _load_document(file_path)
     docs[0].metadata["session_id"] = session_id
     docs[0].metadata["document_name"] = os.path.basename(file_path)
     if user_id:
         docs[0].metadata["user_id"] = user_id
-    chunks = SemanticChunker(_get_embedding_model()).split_documents(docs)
+    chunks = SemanticChunker(embedding_model).split_documents(docs)
 
     if cancel_event is not None and cancel_event.is_set():
         return 0
 
-    delete_document(file_path, session_id, _SHARED_DIR)  # replace any prior ingestion of this same file instead of accumulating duplicates
-    vectorstore = Chroma(persist_directory=_SHARED_DIR, embedding_function=_get_embedding_model())
+    delete_document(file_path, session_id, persist_dir)  # replace any prior ingestion of this same file instead of accumulating duplicates
+    vectorstore = Chroma(persist_directory=persist_dir, embedding_function=embedding_model)
     vectorstore.add_documents(chunks)
     return len(chunks)
 
 
-def delete_session_vectorstore(session_id: str) -> None:
-    """Remove all chunks belonging to a session from the shared ChromaDB."""
-    vectorstore = Chroma(persist_directory=_SHARED_DIR, embedding_function=_get_embedding_model())
+def delete_session_vectorstore(session_id: str, persist_directory: str = None) -> None:
+    """Remove all chunks belonging to a session from the given (or default shared) ChromaDB."""
+    persist_directory = persist_directory or _SHARED_DIR
+    vectorstore = Chroma(persist_directory=persist_directory, embedding_function=_get_embedding_model())
     results = vectorstore.get(where={"session_id": session_id})
     ids = results["ids"]
     if ids:

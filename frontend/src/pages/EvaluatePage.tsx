@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useEvaluation } from "../hooks/useEvaluation";
+import { useModels } from "../hooks/useModels";
+import { useEmbeddingModels } from "../hooks/useEmbeddingModels";
+import { useSessionInfo } from "../hooks/useSessionInfo";
 import ResultsTable from "./ResultsTable.tsx";
+import ModelSelect from "../components/Common/ModelSelect.tsx";
 import type { EvaluationRow } from "../types";
 
 export default function EvaluatePage() {
@@ -10,9 +14,27 @@ export default function EvaluatePage() {
   const sessionId = params.get("session_id") || "";
 
   const [numQuestions, setNumQuestions] = useState(20);
+  const [answerModelId, setAnswerModelId] = useState("");
+  const [judgeModelId, setJudgeModelId] = useState("");
   const [results, setResults] = useState<EvaluationRow[] | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { stage, progress, running, evaluate } = useEvaluation();
+  const models = useModels();
+  const embeddingModels = useEmbeddingModels();
+  const sessionInfo = useSessionInfo(sessionId || null);
+  const embeddingInfo = embeddingModels.find((m) => m.id === sessionInfo?.embedding_model);
+
+  useEffect(() => {
+    if (!judgeModelId && models.length > 0) {
+      setJudgeModelId(models.find((m) => m.type === "frontier")?.id ?? models[0].id);
+    }
+  }, [judgeModelId, models]);
+
+  useEffect(() => {
+    if (!answerModelId && models.length > 0) {
+      setAnswerModelId(models.find((m) => m.type === "open_source")?.id ?? models[0].id);
+    }
+  }, [answerModelId, models]);
 
   const handleRun = async () => {
     if (!filename) {
@@ -22,7 +44,7 @@ export default function EvaluatePage() {
     setResults(null);
     setErrorMsg(null);
     try {
-      await evaluate(filename, sessionId, numQuestions, (evt) => {
+      await evaluate(filename, sessionId, numQuestions, answerModelId, judgeModelId, (evt) => {
         if (evt.stage === "Complete" && Array.isArray(evt.results)) {
           setResults(evt.results as EvaluationRow[]);
         }
@@ -49,6 +71,12 @@ export default function EvaluatePage() {
             RAGAs Evaluation
           </h1>
           <p className="text-sm text-gray-500 mt-1">{filename ? `Document: ${filename}` : "No document selected."}</p>
+          {embeddingInfo && (
+            <p className="text-xs text-gray-400 mt-1">
+              <i className="fa-solid fa-database mr-1"></i>
+              Embeddings: {embeddingInfo.label} ({embeddingInfo.dimensions}d) — fixed for this session
+            </p>
+          )}
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
@@ -62,6 +90,24 @@ export default function EvaluatePage() {
                 value={numQuestions}
                 onChange={(e) => setNumQuestions(parseInt(e.target.value, 10) || 20)}
                 className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Answer model (RAG)</label>
+              <ModelSelect
+                models={models}
+                value={answerModelId}
+                onChange={setAnswerModelId}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Judge model (evaluator)</label>
+              <ModelSelect
+                models={models}
+                value={judgeModelId}
+                onChange={setJudgeModelId}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </div>
             <button

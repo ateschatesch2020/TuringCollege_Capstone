@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSessionContext } from "../../context/SessionContext.tsx";
 import FileSearchPanel from "./FileSearchPanel.tsx";
+import ModelSelect from "../Common/ModelSelect.tsx";
+import EmbeddingModelSelect from "../Common/EmbeddingModelSelect.tsx";
 
 interface NewChatModalProps {
   open: boolean;
@@ -9,9 +11,11 @@ interface NewChatModalProps {
 }
 
 export default function NewChatModal({ open, onClose, onCreated }: NewChatModalProps) {
-  const { createSession } = useSessionContext();
+  const { createSession, models, embeddingModels } = useSessionContext();
   const [title, setTitle] = useState("");
   const [pendingSessionId, setPendingSessionId] = useState<string>("");
+  const [modelId, setModelId] = useState("");
+  const [embeddingModelId, setEmbeddingModelId] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -20,11 +24,23 @@ export default function NewChatModal({ open, onClose, onCreated }: NewChatModalP
     }
   }, [open]);
 
+  useEffect(() => {
+    if (open && !modelId && models.length > 0) {
+      setModelId(models.find((m) => m.type === "frontier")?.id ?? models[0].id);
+    }
+  }, [open, modelId, models]);
+
+  useEffect(() => {
+    if (open && !embeddingModelId && embeddingModels.length > 0) {
+      setEmbeddingModelId(embeddingModels[0].id);
+    }
+  }, [open, embeddingModelId, embeddingModels]);
+
   if (!open) return null;
 
   const handleStartChat = async () => {
     const finalTitle = title.trim() || "New Chat";
-    const sessionId = await createSession(finalTitle, pendingSessionId);
+    const sessionId = await createSession(finalTitle, pendingSessionId, modelId, embeddingModelId);
     onCreated(sessionId);
   };
 
@@ -54,7 +70,34 @@ export default function NewChatModal({ open, onClose, onCreated }: NewChatModalP
             />
           </div>
 
-          {pendingSessionId && <FileSearchPanel sessionId={pendingSessionId} onSearched={() => {}} />}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
+              Model
+            </label>
+            <ModelSelect
+              models={models}
+              value={modelId}
+              onChange={setModelId}
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
+              Embedding Model
+            </label>
+            <EmbeddingModelSelect
+              embeddingModels={embeddingModels}
+              value={embeddingModelId}
+              onChange={setEmbeddingModelId}
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-400 mt-1">Fixed for this session once chosen — applies to every document uploaded here.</p>
+          </div>
+
+          {pendingSessionId && (
+            <FileSearchPanel sessionId={pendingSessionId} onSearched={() => {}} embeddingModelId={embeddingModelId} />
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">

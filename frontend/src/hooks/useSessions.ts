@@ -16,11 +16,11 @@ export function useSessions(userId: string) {
   }, [userId]);
 
   const createSession = useCallback(
-    async (title: string, sessionId: string): Promise<string> => {
+    async (title: string, sessionId: string, model: string, embeddingModel: string): Promise<string> => {
       const res = await fetch(`${API_URL}/sessions/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, title, session_id: sessionId }),
+        body: JSON.stringify({ user_id: userId, title, session_id: sessionId, model, embedding_model: embeddingModel }),
       });
       const data = await res.json();
       return data.session_id as string;
@@ -40,6 +40,18 @@ export function useSessions(userId: string) {
     [loadSessions]
   );
 
+  const updateSessionModel = useCallback(
+    async (sessionId: string, model: string) => {
+      const res = await fetch(`${API_URL}/sessions/${sessionId}/model`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model }),
+      });
+      if (res.ok) await loadSessions();
+    },
+    [loadSessions]
+  );
+
   const deleteSession = useCallback(
     async (sessionId: string) => {
       const res = await fetch(`${API_URL}/sessions/${sessionId}`, { method: "DELETE" });
@@ -49,5 +61,5 @@ export function useSessions(userId: string) {
     [loadSessions]
   );
 
-  return { sessions, loadSessions, createSession, renameSession, deleteSession };
+  return { sessions, loadSessions, createSession, renameSession, updateSessionModel, deleteSession };
 }

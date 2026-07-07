@@ -68,6 +68,8 @@ class TestEvaluateDocumentHybridSection(unittest.TestCase):
             file_path="/docs/report.pdf",
             persist_directory="/chroma/sess1",
             num_questions=1,
+            answer_model_id="openai/gpt-4o",
+            judge_model_id="openai/gpt-4o",
         ))
 
         self.assertEqual(len(results), 1)

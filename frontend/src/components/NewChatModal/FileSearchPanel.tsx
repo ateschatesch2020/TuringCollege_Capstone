@@ -8,9 +8,10 @@ import type { SSEEvent } from "../../types";
 interface FileSearchPanelProps {
   sessionId: string;
   onSearched: () => void;
+  embeddingModelId?: string;
 }
 
-export default function FileSearchPanel({ sessionId, onSearched }: FileSearchPanelProps) {
+export default function FileSearchPanel({ sessionId, onSearched, embeddingModelId }: FileSearchPanelProps) {
   const [keyword, setKeyword] = useState("");
   const [exactMatch, setExactMatch] = useState(false);
   const [containsName, setContainsName] = useState(true);
@@ -124,7 +125,7 @@ export default function FileSearchPanel({ sessionId, onSearched }: FileSearchPan
 
       {result && (
         <div className="overflow-x-auto min-w-0 break-words text-sm">
-          <MessageContent text={result} sessionId={sessionId} />
+          <MessageContent text={result} sessionId={sessionId} embeddingModelId={embeddingModelId} />
         </div>
       )}
     </div>

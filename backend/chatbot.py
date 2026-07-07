@@ -9,14 +9,15 @@ import uuid
 import sqlite3
 import tools
 from tools import make_document_search_tool, make_hybrid_search_tool, make_list_documents_tool
-from rag.rag_vector_db import get_shared_persist_dir
+from rag.rag_vector_db import get_embedding_model, get_persist_dir_for_embedding
+from models_catalog import DEFAULT_MODEL_ID, EMBEDDING_MODEL_CATALOG, DEFAULT_EMBEDDING_MODEL_ID
 from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
 from langchain_core.messages import HumanMessage, AIMessageChunk
 from langgraph.checkpoint.memory import MemorySaver
 from langchain.agents import create_agent
-from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough, RunnableConfig
 from langchain_core.output_parsers import StrOutputParser
 from operator import itemgetter
 from langchain_community.chat_message_histories import SQLChatMessageHistory
@@ -25,9 +26,6 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openrouter import ChatOpenRouter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_openai import OpenAIEmbeddings
-
 from langchain_protocol import Annotated
 from langgraph.graph import END, START, StateGraph, add_messages
 from typing import TypedDict, Optional, List, Any, Dict
@@ -62,7 +60,7 @@ class EvaluatorOutput(BaseModel):
     )
 
 class ChatbotManager:
-    def __init__(self, model_name: str = "openai/gpt-4o-mini"):
+    def __init__(self, model_name: str = DEFAULT_MODEL_ID):
         """ starts the chatbot
         """
         _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -70,38 +68,26 @@ class ChatbotManager:
         self.db = "test_history.db"
         self.db_file_path = os.path.join(_root, self.db)
         self.connection_string = f"sqlite:///{self.db_file_path}"
-        self.model = ChatOpenRouter(
-            model=self.model_name)
-        self.tools = tools.Tools.tools[:] 
+        self._model_bundles: Dict[str, Dict[str, Any]] = {}
+        self._rerank_llm = ChatOpenRouter(model=DEFAULT_MODEL_ID)
+        self.tools = tools.Tools.tools[:]
 
-        # self.embedding_model = HuggingFaceEmbeddings(
-        #   model="sentence-transformers/all-MiniLM-L6-v2")
-        self.embedding_model = OpenAIEmbeddings(
-            #model="openai/text-embedding-3-small",
-            model="openai/text-embedding-3-small",
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY"))
+        self._embedding_models = {m["id"]: get_embedding_model(m["id"]) for m in EMBEDDING_MODEL_CATALOG}
+        self._embedding_persist_dirs = {m["id"]: get_persist_dir_for_embedding(m["id"]) for m in EMBEDDING_MODEL_CATALOG}
+        self.embedding_model = self._embedding_models[DEFAULT_EMBEDDING_MODEL_ID]
         self._init_session_db()
 
-        persist_dir = get_shared_persist_dir()
         session_docs_dir = os.path.join(_root, "documents", "sessions")
-        self.tools.append(make_document_search_tool(
-            embedding_model=self.embedding_model,
-            persist_dir=persist_dir,
-        ))
-        self.tools.append(make_hybrid_search_tool(
-            embedding_model=self.embedding_model,
-            llm=self.model,
-            persist_dir=persist_dir,
-        ))
+        self.tools.append(make_document_search_tool(self._resolve_session_embedding))
+        self.tools.append(make_hybrid_search_tool(self._resolve_session_embedding, llm=self._rerank_llm))
         self.tools.append(make_list_documents_tool(session_docs_dir=session_docs_dir))
-        self.llm_with_tools = self.model.bind_tools(self.tools)
 
-        worker_llm = self.model
-        self.worker_llm_with_tools = worker_llm.bind_tools(self.tools)
-        evaluator_llm = self.model
-        self.evaluator_llm_with_output = evaluator_llm.with_structured_output(EvaluatorOutput)
-        
+        default_bundle = self._get_bundle(self.model_name)
+        self.model = default_bundle["model"]
+        self.worker_llm_with_tools = default_bundle["worker_llm_with_tools"]
+        self.evaluator_llm_with_output = default_bundle["evaluator_llm_with_output"]
+        self.llm_with_tools = self.worker_llm_with_tools
+
         self.checkpointer = MemorySaver()
 
         graph_builder = StateGraph(State)
@@ -133,6 +119,28 @@ class ChatbotManager:
 
         self.graph = graph_builder.compile(checkpointer=sql_memory)
 
+    def _get_bundle(self, model_id: str) -> Dict[str, Any]:
+        """Builds (and caches) a {model, worker_llm_with_tools, evaluator_llm_with_output}
+        bundle for the given OpenRouter model id, so each selectable model is only
+        constructed once and reused across sessions/requests."""
+        if model_id not in self._model_bundles:
+            model = ChatOpenRouter(model=model_id)
+            self._model_bundles[model_id] = {
+                "model": model,
+                "worker_llm_with_tools": model.bind_tools(self.tools),
+                "evaluator_llm_with_output": model.with_structured_output(EvaluatorOutput),
+            }
+        return self._model_bundles[model_id]
+
+    def _resolve_session_embedding(self, session_id: str):
+        """Looks up which embedding model this session was created with and returns the
+        matching (embedding_model_instance, persist_dir) pair. Called by the RAG tools at
+        tool-call time (not at startup), since different sessions may use different models."""
+        embedding_model_id = self.get_session_embedding_model(session_id) or DEFAULT_EMBEDDING_MODEL_ID
+        embedding_model = self._embedding_models.get(embedding_model_id, self._embedding_models[DEFAULT_EMBEDDING_MODEL_ID])
+        persist_dir = self._embedding_persist_dirs.get(embedding_model_id, self._embedding_persist_dirs[DEFAULT_EMBEDDING_MODEL_ID])
+        return embedding_model, persist_dir
+
     def get_token_usage(self, session_id: str) -> dict:
         import tiktoken
         enc = tiktoken.encoding_for_model("gpt-4o-mini")
@@ -154,15 +162,25 @@ class ChatbotManager:
         """creates chat_sessions table in sqlite db"""
 
         with sqlite3.connect(self.db_file_path) as conn:
-            conn.execute('''
+            conn.execute(f'''
                 CREATE TABLE IF NOT EXISTS chat_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     session_id TEXT NOT NULL,
                     user_id TEXT NOT NULL,
                     title TEXT NOT NULL,
+                    model TEXT NOT NULL DEFAULT '{DEFAULT_MODEL_ID}',
+                    embedding_model TEXT NOT NULL DEFAULT '{DEFAULT_EMBEDDING_MODEL_ID}',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            try:
+                conn.execute(f"ALTER TABLE chat_sessions ADD COLUMN model TEXT DEFAULT '{DEFAULT_MODEL_ID}'")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute(f"ALTER TABLE chat_sessions ADD COLUMN embedding_model TEXT DEFAULT '{DEFAULT_EMBEDDING_MODEL_ID}'")
+            except sqlite3.OperationalError:
+                pass
 
     def _get_session_history(self, session_id: str) -> ChatMessageHistory:
         """ gets the chat history of given session_id from sqlite database"""
@@ -171,15 +189,18 @@ class ChatbotManager:
             connection=self.connection_string
         )
 
-    def create_session(self, user_id: str, title: str, session_id: str = None) -> str:
+    def create_session(self, user_id: str, title: str, session_id: str = None,
+                       model: str = None, embedding_model: str = None) -> str:
         """ creates a row in chat_sessions table."""
         session_id = session_id or str(uuid.uuid4())
+        model = model or DEFAULT_MODEL_ID
+        embedding_model = embedding_model or DEFAULT_EMBEDDING_MODEL_ID
         try:
             with sqlite3.connect(self.db_file_path) as conn:
                 conn.execute('''
-                    INSERT INTO chat_sessions (session_id, user_id, title)
-                    VALUES (?, ?, ?)
-                ''', (session_id, user_id, title))
+                    INSERT INTO chat_sessions (session_id, user_id, title, model, embedding_model)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (session_id, user_id, title, model, embedding_model))
             return session_id
         except Exception as e:
             logger.error("create_session failed for user %s: %s", user_id, str(e), exc_info=True)
@@ -203,7 +224,7 @@ class ChatbotManager:
         with sqlite3.connect(self.db_file_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute('''
-                SELECT session_id, title, created_at FROM chat_sessions
+                SELECT session_id, title, model, embedding_model, created_at FROM chat_sessions
                 WHERE user_id = ?
                 ORDER BY created_at DESC
             ''', (user_id,))
@@ -218,6 +239,25 @@ class ChatbotManager:
             ).fetchone()
         return row[0] if row else None
 
+    def get_session_embedding_model(self, session_id: str) -> Optional[str]:
+        """Looks up the immutable embedding_model id chosen for a session at creation time."""
+        with sqlite3.connect(self.db_file_path) as conn:
+            row = conn.execute(
+                'SELECT embedding_model FROM chat_sessions WHERE session_id = ?', (session_id,)
+            ).fetchone()
+        return row[0] if row else None
+
+    def get_session_info(self, session_id: str) -> Optional[dict]:
+        """Single-session lookup for read-only display (title/model/embedding_model), used by
+        routes/pages that don't already have the full session list in context (e.g. EvaluatePage)."""
+        with sqlite3.connect(self.db_file_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                'SELECT session_id, title, model, embedding_model, created_at FROM chat_sessions WHERE session_id = ?',
+                (session_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
     def update_session_title(self, session_id: str, new_title: str):
         with sqlite3.connect(self.db_file_path) as conn:
             conn.execute('''
@@ -226,11 +266,19 @@ class ChatbotManager:
                 WHERE session_id = ?
             ''', (new_title, session_id))
 
+    def update_session_model(self, session_id: str, model: str):
+        with sqlite3.connect(self.db_file_path) as conn:
+            conn.execute('''
+                UPDATE chat_sessions
+                SET model = ?
+                WHERE session_id = ?
+            ''', (model, session_id))
+
     def get_messages(self, session_id: str):
         history = self._get_session_history(session_id)
         return history.messages
 
-    def chat(self, session_id: str, query: str):
+    def chat(self, session_id: str, query: str, model_id: str = None):
         """ end point method for chatting """
         response = "Sorry, I encountered an error while processing your request."
         try:
@@ -246,7 +294,7 @@ class ChatbotManager:
                     "user_input_needed": False,
                     "tool_retry_deadline": None,
                 },
-                config={"configurable": {"thread_id": session_id}})
+                config={"configurable": {"thread_id": session_id, "model_id": model_id or DEFAULT_MODEL_ID}})
             response = result["messages"][-1].content
         except Exception as e:
             logger.error("chat failed for session %s: %s", session_id, str(e), exc_info=True)
@@ -257,7 +305,7 @@ class ChatbotManager:
             history.add_ai_message(response)
         return response
 
-    def chat_stream(self, session_id: str, query: str):
+    def chat_stream(self, session_id: str, query: str, model_id: str = None):
         full_response = "Sorry, I encountered an error while processing your request."
         try:
             today = date.today().strftime("%Y-%m-%d")
@@ -273,7 +321,7 @@ class ChatbotManager:
                     "user_input_needed": False,
                     "tool_retry_deadline": None,
                 },
-                config={"configurable": {"thread_id": session_id}},
+                config={"configurable": {"thread_id": session_id, "model_id": model_id or DEFAULT_MODEL_ID}},
                 stream_mode="messages"
             ):
                 if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
@@ -338,7 +386,9 @@ class ChatbotManager:
                 ))
         return fixed
 
-    def worker(self, state: State) -> Dict[str, Any]:
+    def worker(self, state: State, config: RunnableConfig) -> Dict[str, Any]:
+        model_id = config.get("configurable", {}).get("model_id", DEFAULT_MODEL_ID)
+        worker_llm_with_tools = self._get_bundle(model_id)["worker_llm_with_tools"]
         system_message = f"""You are an Office Helper assistant. Help users work with their company documents and create professional outputs.
         The current date and time is {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.
 
@@ -401,7 +451,7 @@ class ChatbotManager:
         messages = self._close_orphaned_tool_calls(messages)
 
         # Invoke the LLM with tools
-        response = self.worker_llm_with_tools.invoke(messages)
+        response = worker_llm_with_tools.invoke(messages)
 
         # Establish (or carry forward) the deadline for this turn's tool-retry loop
         timeout_seconds = state.get("tool_retry_timeout_seconds", 30)
@@ -427,7 +477,9 @@ class ChatbotManager:
         else:
             return "evaluator"
         
-    def timeout_notice(self, state: State) -> Dict[str, Any]:
+    def timeout_notice(self, state: State, config: RunnableConfig) -> Dict[str, Any]:
+        model_id = config.get("configurable", {}).get("model_id", DEFAULT_MODEL_ID)
+        model = self._get_bundle(model_id)["model"]
         last_error = "unknown error"
         for message in reversed(state["messages"]):
             if isinstance(message, ToolMessage) and str(message.content).startswith("Error:"):
@@ -453,7 +505,7 @@ class ChatbotManager:
                 f"or would rather try a different approach given the error."
             )),
         ]
-        response = self.model.invoke(explain_prompt)
+        response = model.invoke(explain_prompt)
 
         return {
             "messages": [response],
@@ -472,7 +524,9 @@ class ChatbotManager:
                 conversation += f"Assistant: {text}\n"
         return conversation
 
-    def evaluator(self, state: State) -> State:
+    def evaluator(self, state: State, config: RunnableConfig) -> State:
+        model_id = config.get("configurable", {}).get("model_id", DEFAULT_MODEL_ID)
+        evaluator_llm_with_output = self._get_bundle(model_id)["evaluator_llm_with_output"]
         last_response = state["messages"][-1].content
 
         system_message = """You are an evaluator that determines if a task has been completed successfully by an Assistant.
@@ -506,7 +560,7 @@ class ChatbotManager:
             HumanMessage(content=user_message),
         ]
 
-        eval_result = self.evaluator_llm_with_output.invoke(evaluator_messages)
+        eval_result = evaluator_llm_with_output.invoke(evaluator_messages)
         new_state = {
             "messages": [
                 {

@@ -12,7 +12,9 @@ import NewChatModal from "../components/NewChatModal/NewChatModal.tsx";
 import type { ChatMessage } from "../types";
 
 export default function ChatPage() {
-  const { currentSessionId, setCurrentSessionId, loadSessions } = useSessionContext();
+  const { currentSessionId, setCurrentSessionId, loadSessions, sessions, models, embeddingModels, updateSessionModel } =
+    useSessionContext();
+  const currentSession = sessions.find((s) => s.session_id === currentSessionId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -59,7 +61,7 @@ export default function ChatPage() {
     sendStartedRef.current = true;
     setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: "" }]);
     try {
-      for await (const fullText of streamMessage(currentSessionId, text)) {
+      for await (const fullText of streamMessage(currentSessionId, text, currentSession?.model)) {
         setMessages((prev) => {
           const copy = [...prev];
           copy[copy.length - 1] = { role: "assistant", content: fullText };
@@ -82,7 +84,15 @@ export default function ChatPage() {
     <DocumentsProvider sessionId={currentSessionId}>
       <Sidebar onNewChat={() => setModalOpen(true)} />
       <div className="flex-1 flex flex-col h-full bg-gray-50/50 min-w-0 relative">
-        <ChatHeader percent={percent} onReset={() => setCurrentSessionId(null)} />
+        <ChatHeader
+          percent={percent}
+          onReset={() => setCurrentSessionId(null)}
+          model={currentSession?.model}
+          models={models}
+          onModelChange={(id) => currentSessionId && updateSessionModel(currentSessionId, id)}
+          embeddingModelId={currentSession?.embedding_model}
+          embeddingModels={embeddingModels}
+        />
         <ChatContainer
           ref={scrollRef}
           sessionId={currentSessionId}

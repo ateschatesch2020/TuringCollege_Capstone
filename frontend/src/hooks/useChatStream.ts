@@ -5,7 +5,7 @@ export function useChatStream() {
   const abortRef = useRef<AbortController | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
 
-  const streamMessage = useCallback(async function* (sessionId: string, query: string) {
+  const streamMessage = useCallback(async function* (sessionId: string, query: string, model?: string) {
     const controller = new AbortController();
     abortRef.current = controller;
     setIsStreaming(true);
@@ -13,7 +13,7 @@ export function useChatStream() {
       const res = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, query }),
+        body: JSON.stringify({ session_id: sessionId, query, model }),
         signal: controller.signal,
       });
       const reader = res.body!.getReader();

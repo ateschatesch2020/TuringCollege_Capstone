@@ -6,9 +6,10 @@ import type { FileSelectEntry } from "../../types";
 interface MessageContentProps {
   text: string;
   sessionId: string;
+  embeddingModelId?: string;
 }
 
-export default function MessageContent({ text, sessionId }: MessageContentProps) {
+export default function MessageContent({ text, sessionId, embeddingModelId }: MessageContentProps) {
   return (
     <div className="message-content text-[15px] leading-relaxed break-text">
       <ReactMarkdown
@@ -23,7 +24,7 @@ export default function MessageContent({ text, sessionId }: MessageContentProps)
                 return null;
               }
               if (!Array.isArray(files) || files.length === 0) return null;
-              return <FileSelectWidget files={files} sessionId={sessionId} />;
+              return <FileSelectWidget files={files} sessionId={sessionId} embeddingModelId={embeddingModelId} />;
             }
             return (
               <code className={className} {...props}>

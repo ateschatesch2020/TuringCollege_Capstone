@@ -25,10 +25,11 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from chatbot import ChatbotManager
 from chatform import FormManager
+from models_catalog import MODEL_CATALOG, EMBEDDING_MODEL_CATALOG, get_embedding_model_info, DEFAULT_MODEL_ID
 from tools import list_session_documents
 from rag.rag_vector_db import (delete_document,
                                add_document_for_session, delete_session_vectorstore,
-                               get_shared_persist_dir, SUPPORTED_EXTENSIONS)
+                               get_persist_dir_for_embedding, SUPPORTED_EXTENSIONS)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pathlib import Path
@@ -49,10 +50,13 @@ class CreateSessionRequest(BaseModel):
     user_id: str
     title: str = "New Chat Session"
     session_id: Optional[str] = None
+    model: Optional[str] = None
+    embedding_model: Optional[str] = None
 
 class ChatRequest(BaseModel):
     session_id: str
-    query: str  
+    query: str
+    model: Optional[str] = None
 
 class MessageResponse(BaseModel):
     content: str
@@ -61,14 +65,20 @@ class MessageResponse(BaseModel):
 class RenameSessionRequest(BaseModel):
     title: str
 
+class SetSessionModelRequest(BaseModel):
+    model: str
+
 class EvaluateRequest(BaseModel):
     filename: str
     num_questions: int = 20
     session_id: str
+    answer_model_id: str = DEFAULT_MODEL_ID
+    judge_model_id: str = DEFAULT_MODEL_ID
 
 class IngestPathsRequest(BaseModel):
     paths: List[str]
     session_id: str
+    embedding_model_id: Optional[str] = None
 
 class FormSearchRequest(BaseModel):
     keyword: str
@@ -77,20 +87,34 @@ class FormSearchRequest(BaseModel):
 
 @app.post("/sessions/create")
 def create_session(request: CreateSessionRequest):
+    if request.embedding_model and not get_embedding_model_info(request.embedding_model):
+        raise HTTPException(status_code=400, detail=f"Unknown embedding_model: {request.embedding_model}")
     try:
         session_id = chatbot.create_session(
-            user_id=request.user_id, title=request.title, session_id=request.session_id
+            user_id=request.user_id, title=request.title, session_id=request.session_id,
+            model=request.model, embedding_model=request.embedding_model
         )
         return {"session_id": session_id}
     except Exception as e:
         logger.error("create_session failed", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/models")
+def list_models():
+    return {"models": MODEL_CATALOG}
+
+@app.get("/embedding-models")
+def list_embedding_models():
+    return {"embedding_models": EMBEDDING_MODEL_CATALOG}
+
 @app.delete("/sessions/{session_id}")
 def delete_session(session_id: str):
     try:
+        embedding_model_id = chatbot.get_session_embedding_model(session_id)  # look up before deleting the row
+        persist_dir = get_persist_dir_for_embedding(embedding_model_id)
         chatbot.delete_session(session_id=session_id)
-        delete_session_vectorstore(session_id)
+        delete_session_vectorstore(session_id, persist_dir)
         shutil.rmtree(os.path.join(_SESSION_DOCS_DIR, session_id), ignore_errors=True)
         return {"session_id": session_id}
     except Exception as e:
@@ -106,6 +130,13 @@ def list_sessions(user_id: str):
         logger.error("list_sessions failed for user %s", user_id, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/sessions/{session_id}/info")
+def get_session_info(session_id: str):
+    info = chatbot.get_session_info(session_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return info
+
 @app.patch("/sessions/{session_id}/rename")
 def rename_session(session_id: str, request: RenameSessionRequest):
     try:
@@ -113,6 +144,15 @@ def rename_session(session_id: str, request: RenameSessionRequest):
         return {"session_id": session_id, "title": request.title}
     except Exception as e:
         logger.error("rename_session failed for %s", session_id, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/sessions/{session_id}/model")
+def set_session_model(session_id: str, request: SetSessionModelRequest):
+    try:
+        chatbot.update_session_model(session_id=session_id, model=request.model)
+        return {"session_id": session_id, "model": request.model}
+    except Exception as e:
+        logger.error("set_session_model failed for %s", session_id, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/history/{session_id}")
@@ -133,7 +173,7 @@ def get_history(session_id: str):
 def chat_endpoint(request: ChatRequest):
     def iterate_responses():
         try:
-            for response in chatbot.chat_stream(session_id=request.session_id, query=request.query):
+            for response in chatbot.chat_stream(session_id=request.session_id, query=request.query, model_id=request.model):
                 yield response
         except Exception as e:
             logger.error("Unhandled error in chat stream for session %s: %s", request.session_id, str(e), exc_info=True)
@@ -162,6 +202,7 @@ async def upload_document(request: Request, file: UploadFile = File(...), sessio
     file_path = os.path.join(session_docs_dir, file.filename)
     content = await file.read()
     user_id = chatbot.get_user_id_for_session(session_id)
+    embedding_model_id = chatbot.get_session_embedding_model(session_id)
 
     async def event_stream():
         cancel_event = threading.Event()
@@ -173,7 +214,8 @@ async def upload_document(request: Request, file: UploadFile = File(...), sessio
             yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30})}\n\n"
 
             add_task = asyncio.create_task(
-                asyncio.to_thread(add_document_for_session, file_path, session_id, user_id=user_id, cancel_event=cancel_event)
+                asyncio.to_thread(add_document_for_session, file_path, session_id, user_id=user_id,
+                                  cancel_event=cancel_event, embedding_model_id=embedding_model_id)
             )
 
             while not add_task.done():
@@ -231,6 +273,7 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
 
     session_id = body.session_id
     user_id = chatbot.get_user_id_for_session(session_id)
+    embedding_model_id = chatbot.get_session_embedding_model(session_id) or body.embedding_model_id
 
     async def event_stream():
         total = len(valid_paths)
@@ -245,7 +288,8 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
                 shutil.copy2(src_path, dest_path)
                 yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
                 add_task = asyncio.create_task(
-                    asyncio.to_thread(add_document_for_session, dest_path, session_id, user_id=user_id, cancel_event=cancel_event)
+                    asyncio.to_thread(add_document_for_session, dest_path, session_id, user_id=user_id,
+                                      cancel_event=cancel_event, embedding_model_id=embedding_model_id)
                 )
 
                 while not add_task.done():
@@ -318,7 +362,8 @@ def download_generated_file(filename: str):
 @app.delete("/documents/{filename}")
 def delete_document_endpoint(filename: str, session_id: str):
     file_path = os.path.join(_SESSION_DOCS_DIR, session_id, filename)
-    persist_dir = get_shared_persist_dir()
+    embedding_model_id = chatbot.get_session_embedding_model(session_id)
+    persist_dir = get_persist_dir_for_embedding(embedding_model_id)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
     try:
@@ -335,7 +380,8 @@ def delete_document_endpoint(filename: str, session_id: str):
 async def evaluate_endpoint(request: EvaluateRequest):
     from rag.ragas_evaluator import evaluate_document
     file_path = os.path.join(_SESSION_DOCS_DIR, request.session_id, request.filename)
-    persist_dir = get_shared_persist_dir()
+    embedding_model_id = chatbot.get_session_embedding_model(request.session_id)
+    persist_dir = get_persist_dir_for_embedding(embedding_model_id)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -356,7 +402,10 @@ async def evaluate_endpoint(request: EvaluateRequest):
                     file_path=file_path,
                     persist_directory=persist_dir,
                     num_questions=request.num_questions,
+                    answer_model_id=request.answer_model_id,
+                    judge_model_id=request.judge_model_id,
                     progress_cb=cb,
+                    embedding_model_id=embedding_model_id,
                 )
                 await queue.put({"done": True, "results": results})
 

@@ -8,9 +8,10 @@ import type { FileSelectEntry } from "../../types";
 interface FileSelectWidgetProps {
   files: FileSelectEntry[];
   sessionId: string;
+  embeddingModelId?: string;
 }
 
-export default function FileSelectWidget({ files, sessionId }: FileSelectWidgetProps) {
+export default function FileSelectWidget({ files, sessionId, embeddingModelId }: FileSelectWidgetProps) {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [skippedNotice, setSkippedNotice] = useState<string | null>(null);
   const { documents, refresh } = useDocuments(sessionId);
@@ -33,7 +34,7 @@ export default function FileSelectWidget({ files, sessionId }: FileSelectWidgetP
     const skipped = paths.length - filtered.length;
     setSkippedNotice(skipped > 0 ? `${skipped} file(s) already indexed, skipping.` : null);
     if (filtered.length === 0) return;
-    await ingest(filtered);
+    await ingest(filtered, embeddingModelId);
   };
 
   return (

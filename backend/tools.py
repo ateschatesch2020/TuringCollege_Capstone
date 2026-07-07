@@ -7,6 +7,7 @@ import uuid
 from typing import Optional, List
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
+from pydantic import BaseModel, Field, field_validator
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
 load_dotenv()
@@ -81,7 +82,23 @@ def web_search(query: str) -> str:
     return "\n\n".join(lines)
 
 
-@tool
+class GeneratePresentationInput(BaseModel):
+    title: str = Field(description="presentation title")
+    slides_json: str = Field(description=(
+        "JSON array of slides, e.g. "
+        '[{"title": "Introduction", "content": "Point 1\\nPoint 2\\nPoint 3"}]. '
+        "Each slide must have a 'title' and 'content' (newline-separated bullet points)."
+    ))
+
+    @field_validator("slides_json", mode="before")
+    @classmethod
+    def _coerce_to_json_string(cls, v):
+        if isinstance(v, (list, dict)):
+            return json.dumps(v)
+        return v
+
+
+@tool(args_schema=GeneratePresentationInput)
 def generate_presentation(title: str, slides_json: str) -> str:
     """Create a PowerPoint presentation (.pptx) file and return a download link.
     Use this when the user asks to create a presentation or slideshow.
@@ -489,7 +506,7 @@ def make_list_documents_tool(session_docs_dir: str):
     return list_uploaded_documents
 
 
-def make_document_search_tool(embedding_model, persist_dir: str):
+def make_document_search_tool(resolve_embedding):
     @tool
     def search_documents(query: str, config: RunnableConfig, document_name: Optional[str] = None) -> str:
         """Search the documents uploaded in this chat session for information.
@@ -503,6 +520,7 @@ def make_document_search_tool(embedding_model, persist_dir: str):
         session_id = (config.get("configurable") or {}).get("thread_id")
         if not session_id:
             return "No relevant information found in uploaded documents."
+        embedding_model, persist_dir = resolve_embedding(session_id)
         where = {"session_id": session_id} if not document_name else \
             {"$and": [{"session_id": session_id}, {"document_name": document_name}]}
         vectorstore = Chroma(persist_directory=persist_dir, embedding_function=embedding_model)
@@ -587,7 +605,7 @@ def hybrid_retrieve(vectorstore, query: str, llm, k: int = 5, candidate_k: int =
     return combined[:k] if len(combined) <= k else _llm_rerank(llm, query, combined, k=k)
 
 
-def make_hybrid_search_tool(embedding_model, llm, persist_dir: str):
+def make_hybrid_search_tool(resolve_embedding, llm):
     @tool
     def hybrid_search_documents(query: str, config: RunnableConfig, document_name: Optional[str] = None) -> str:
         """Hybrid search over this session's uploaded documents: runs semantic and keyword
@@ -603,6 +621,7 @@ def make_hybrid_search_tool(embedding_model, llm, persist_dir: str):
         session_id = (config.get("configurable") or {}).get("thread_id")
         if not session_id:
             return "No relevant information found in uploaded documents."
+        embedding_model, persist_dir = resolve_embedding(session_id)
         where = {"session_id": session_id} if not document_name else \
             {"$and": [{"session_id": session_id}, {"document_name": document_name}]}
         vectorstore = Chroma(persist_directory=persist_dir, embedding_function=embedding_model)

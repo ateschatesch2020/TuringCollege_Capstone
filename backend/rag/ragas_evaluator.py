@@ -5,30 +5,27 @@ import re
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
+from langchain_openrouter import ChatOpenRouter
 
 load_dotenv()
 
-from .rag_vector_db import _get_embedding_model, _load_document
+from .rag_vector_db import _get_embedding_model, _get_huggingface_embedding_model, _load_document
 from tools import hybrid_retrieve
 
 
-def _get_llm() -> ChatOpenAI:
-    return ChatOpenAI(
-        model="openai/gpt-4o-mini",
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-    )
+def _get_llm(model_id: str) -> BaseChatModel:
+    return ChatOpenRouter(model=model_id)
 
 
-async def _llm_score(llm: ChatOpenAI, prompt: str) -> float:
+async def _llm_score(llm: BaseChatModel, prompt: str) -> float:
     response = await llm.ainvoke(prompt + "\n\nRespond with only a decimal number between 0 and 1, nothing else.")
     text = response.content.strip()
     match = re.search(r"1(?:\.0+)?|0(?:\.\d+)?|\.\d+", text)
     return min(1.0, max(0.0, float(match.group()))) if match else 0.0
 
 
-async def _score_faithfulness(llm: ChatOpenAI, question: str, answer: str, contexts: list[str]) -> float:
+async def _score_faithfulness(llm: BaseChatModel, question: str, answer: str, contexts: list[str]) -> float:
     ctx = "\n---\n".join(contexts)
     prompt = (
         f"Context:\n{ctx}\n\n"
@@ -40,7 +37,7 @@ async def _score_faithfulness(llm: ChatOpenAI, question: str, answer: str, conte
     return await _llm_score(llm, prompt)
 
 
-async def _score_answer_relevancy(llm: ChatOpenAI, question: str, answer: str) -> float:
+async def _score_answer_relevancy(llm: BaseChatModel, question: str, answer: str) -> float:
     prompt = (
         f"Question: {question}\n"
         f"Answer: {answer}\n\n"
@@ -50,7 +47,7 @@ async def _score_answer_relevancy(llm: ChatOpenAI, question: str, answer: str) -
     return await _llm_score(llm, prompt)
 
 
-async def _score_context_precision(llm: ChatOpenAI, question: str, contexts: list[str]) -> float:
+async def _score_context_precision(llm: BaseChatModel, question: str, contexts: list[str]) -> float:
     ctx = "\n---\n".join(contexts)
     prompt = (
         f"Question: {question}\n"
@@ -61,7 +58,7 @@ async def _score_context_precision(llm: ChatOpenAI, question: str, contexts: lis
     return await _llm_score(llm, prompt)
 
 
-async def _score_context_recall(llm: ChatOpenAI, expected: str, contexts: list[str]) -> float:
+async def _score_context_recall(llm: BaseChatModel, expected: str, contexts: list[str]) -> float:
     ctx = "\n---\n".join(contexts)
     prompt = (
         f"Reference answer: {expected}\n"
@@ -72,7 +69,7 @@ async def _score_context_recall(llm: ChatOpenAI, expected: str, contexts: list[s
     return await _llm_score(llm, prompt)
 
 
-async def generate_qa_pairs(doc_content: str, n: int, llm: ChatOpenAI) -> list[dict]:
+async def generate_qa_pairs(doc_content: str, n: int, llm: BaseChatModel) -> list[dict]:
     prompt = (
         f"Generate exactly {n} diverse question-answer pairs based on the document below. "
         "Questions should cover different sections and topics. "
@@ -92,10 +89,14 @@ async def evaluate_document(
     file_path: str,
     persist_directory: str,
     num_questions: int,
+    answer_model_id: str,
+    judge_model_id: str,
     progress_cb=None,
+    embedding_model_id: str | None = None,
 ) -> list[dict]:
-    llm = _get_llm()
-    embeddings = _get_embedding_model()
+    answer_llm = _get_llm(answer_model_id)
+    judge_llm = _get_llm(judge_model_id)
+    embeddings = _get_huggingface_embedding_model() if embedding_model_id == "huggingface" else _get_embedding_model()
 
     docs = _load_document(file_path)
     doc_content = "\n".join(d.page_content for d in docs)
@@ -103,7 +104,7 @@ async def evaluate_document(
     if progress_cb:
         await progress_cb("Generating test questions...", 10)
 
-    qa_pairs = await generate_qa_pairs(doc_content, num_questions, llm)
+    qa_pairs = await generate_qa_pairs(doc_content, num_questions, judge_llm)
 
     vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {"source": file_path}})
@@ -122,28 +123,28 @@ async def evaluate_document(
 
         context_str = "\n\n".join(contexts)
         rag_prompt = f"Use the following context to answer the question.\n\nContext:\n{context_str}\n\nQuestion: {question}"
-        rag_response = await llm.ainvoke(rag_prompt)
+        rag_response = await answer_llm.ainvoke(rag_prompt)
         rag_answer = rag_response.content
 
         hybrid_docs = await asyncio.to_thread(
-            hybrid_retrieve, vectorstore, question, llm, 5, 10, {"source": file_path}
+            hybrid_retrieve, vectorstore, question, judge_llm, 5, 10, {"source": file_path}
         )
         hybrid_contexts = [d.page_content for d in hybrid_docs]
 
         hybrid_context_str = "\n\n".join(hybrid_contexts)
         hybrid_prompt = f"Use the following context to answer the question.\n\nContext:\n{hybrid_context_str}\n\nQuestion: {question}"
-        hybrid_response = await llm.ainvoke(hybrid_prompt)
+        hybrid_response = await answer_llm.ainvoke(hybrid_prompt)
         hybrid_answer = hybrid_response.content
 
         fa, ar, cp, cr, h_fa, h_ar, h_cp, h_cr = await asyncio.gather(
-            _score_faithfulness(llm, question, rag_answer, contexts),
-            _score_answer_relevancy(llm, question, rag_answer),
-            _score_context_precision(llm, question, contexts),
-            _score_context_recall(llm, expected, contexts),
-            _score_faithfulness(llm, question, hybrid_answer, hybrid_contexts),
-            _score_answer_relevancy(llm, question, hybrid_answer),
-            _score_context_precision(llm, question, hybrid_contexts),
-            _score_context_recall(llm, expected, hybrid_contexts),
+            _score_faithfulness(judge_llm, question, rag_answer, contexts),
+            _score_answer_relevancy(judge_llm, question, rag_answer),
+            _score_context_precision(judge_llm, question, contexts),
+            _score_context_recall(judge_llm, expected, contexts),
+            _score_faithfulness(judge_llm, question, hybrid_answer, hybrid_contexts),
+            _score_answer_relevancy(judge_llm, question, hybrid_answer),
+            _score_context_precision(judge_llm, question, hybrid_contexts),
+            _score_context_recall(judge_llm, expected, hybrid_contexts),
         )
 
         results.append({

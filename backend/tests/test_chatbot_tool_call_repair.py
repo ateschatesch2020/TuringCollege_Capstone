@@ -1,4 +1,4 @@
-"""Unit tests for ChatbotManager._close_orphaned_tool_calls.
+"""Unit tests for agent._close_orphaned_tool_calls.
 
 Regression test for: a tool exception aborting the LangGraph "tools" step
 leaves an AIMessage(tool_calls=...) in the checkpointed session state with no
@@ -13,7 +13,7 @@ import unittest
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from chatbot import ChatbotManager
+from agent import _close_orphaned_tool_calls
 
 
 def _tool_call(name, call_id):
@@ -21,11 +21,6 @@ def _tool_call(name, call_id):
 
 
 class TestCloseOrphanedToolCalls(unittest.TestCase):
-    def setUp(self):
-        # _close_orphaned_tool_calls doesn't touch instance state, so skip
-        # ChatbotManager.__init__ (which needs live API keys/DB connections).
-        self.manager = ChatbotManager.__new__(ChatbotManager)
-
     def test_inserts_placeholder_for_unanswered_tool_call(self):
         messages = [
             HumanMessage(content="plan my trip"),
@@ -33,7 +28,7 @@ class TestCloseOrphanedToolCalls(unittest.TestCase):
             HumanMessage(content="next message"),
         ]
 
-        fixed = self.manager._close_orphaned_tool_calls(messages)
+        fixed = _close_orphaned_tool_calls(messages)
 
         self.assertEqual(len(fixed), 4)
         self.assertIsInstance(fixed[2], ToolMessage)
@@ -48,7 +43,7 @@ class TestCloseOrphanedToolCalls(unittest.TestCase):
             HumanMessage(content="next message"),
         ]
 
-        fixed = self.manager._close_orphaned_tool_calls(messages)
+        fixed = _close_orphaned_tool_calls(messages)
 
         self.assertEqual(fixed, messages)
 
@@ -61,7 +56,7 @@ class TestCloseOrphanedToolCalls(unittest.TestCase):
             ToolMessage(content="ok", tool_call_id="call_1"),
         ]
 
-        fixed = self.manager._close_orphaned_tool_calls(messages)
+        fixed = _close_orphaned_tool_calls(messages)
 
         tool_call_ids = {m.tool_call_id for m in fixed if isinstance(m, ToolMessage)}
         self.assertEqual(tool_call_ids, {"call_1", "call_2"})
@@ -69,7 +64,7 @@ class TestCloseOrphanedToolCalls(unittest.TestCase):
     def test_no_tool_calls_is_a_no_op(self):
         messages = [HumanMessage(content="hi"), AIMessage(content="hello")]
 
-        fixed = self.manager._close_orphaned_tool_calls(messages)
+        fixed = _close_orphaned_tool_calls(messages)
 
         self.assertEqual(fixed, messages)
 

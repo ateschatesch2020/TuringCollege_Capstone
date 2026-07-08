@@ -403,23 +403,30 @@ async def evaluate_endpoint(request: EvaluateRequest):
                 await queue.put({"stage": stage, "progress": pct})
 
             async def run_eval():
-                results = await evaluate_document(
-                    file_path=file_path,
-                    persist_directory=persist_dir,
-                    num_questions=request.num_questions,
-                    answer_model_id=request.answer_model_id,
-                    judge_model_id=request.judge_model_id,
-                    progress_cb=cb,
-                    embedding_model_id=embedding_model_id,
-                )
-                await queue.put({"done": True, "results": results})
+                try:
+                    results = await evaluate_document(
+                        file_path=file_path,
+                        persist_directory=persist_dir,
+                        num_questions=request.num_questions,
+                        answer_model_id=request.answer_model_id,
+                        judge_model_id=request.judge_model_id,
+                        progress_cb=cb,
+                        embedding_model_id=embedding_model_id,
+                    )
+                    await queue.put({"done": True, "results": results})
+                except Exception as e:
+                    logger.error("evaluate_document failed for %s", request.filename, exc_info=True)
+                    await queue.put({"done": True, "error": str(e)})
 
             task = asyncio.create_task(run_eval())
 
             while True:
                 msg = await queue.get()
                 if msg.get("done"):
-                    yield sse_event({"stage": "Complete", "progress": 100, "results": msg["results"]})
+                    if "error" in msg:
+                        yield sse_event({"stage": "Error", "error": msg["error"]})
+                    else:
+                        yield sse_event({"stage": "Complete", "progress": 100, "results": msg["results"]})
                     break
                 yield sse_event({"stage": msg["stage"], "progress": msg["progress"]})
 

@@ -18,7 +18,7 @@ export default function EvaluatePage() {
   const [judgeModelId, setJudgeModelId] = useState("");
   const [results, setResults] = useState<EvaluationRow[] | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const { stage, progress, running, evaluate } = useEvaluation();
+  const { stage, progress, running, error, evaluate } = useEvaluation();
   const models = useModels();
   const embeddingModels = useEmbeddingModels();
   const sessionInfo = useSessionInfo(sessionId || null);
@@ -137,10 +137,10 @@ export default function EvaluatePage() {
           </div>
         )}
 
-        {errorMsg && (
+        {(errorMsg || error) && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
             <i className="fa-solid fa-circle-exclamation mr-2"></i>
-            <span>{errorMsg}</span>
+            <span>{errorMsg || error}</span>
           </div>
         )}
       </div>

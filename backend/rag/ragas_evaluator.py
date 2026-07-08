@@ -15,7 +15,10 @@ from tools import hybrid_retrieve
 
 
 def _get_llm(model_id: str) -> BaseChatModel:
-    return ChatOpenRouter(model=model_id)
+    """Retries transient failures (dropped connections, DNS blips) up to 3x with
+    backoff -- evaluate_document fires up to 8 concurrent LLM calls per question,
+    so a single flaky connection previously aborted the entire evaluation run."""
+    return ChatOpenRouter(model=model_id).with_retry(stop_after_attempt=3, wait_exponential_jitter=True)
 
 
 async def _llm_score(llm: BaseChatModel, prompt: str) -> float:

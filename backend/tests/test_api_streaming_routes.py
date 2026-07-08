@@ -176,6 +176,35 @@ class TestEvaluateEndpoint(unittest.TestCase):
         complete = next(e for e in events if e.get("stage") == "Complete")
         self.assertEqual(complete["results"][0]["question"], "q1")
 
+    def test_stream_terminates_with_error_frame_when_evaluate_document_raises(self):
+        """Regression test: evaluate_document raising used to leave run_eval()'s
+        exception unobserved (an orphaned asyncio Task), which left the SSE
+        consumer loop blocked on queue.get() forever -- the response never
+        completed and the frontend was stuck on "Running..." indefinitely."""
+        async def failing_evaluate_document(**kwargs):
+            await kwargs["progress_cb"]("Evaluating question 1/1...", 50)
+            raise RuntimeError("boom: simulated transient network failure")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "s1")
+            os.makedirs(session_dir)
+            doc_path = os.path.join(session_dir, "report.pdf")
+            with open(doc_path, "w") as f:
+                f.write("x")
+            with patch("api._SESSION_DOCS_DIR", tmpdir), \
+                 patch("rag.ragas_evaluator.evaluate_document", side_effect=failing_evaluate_document):
+                res = client.post(
+                    "/evaluate",
+                    json={"filename": "report.pdf", "session_id": "s1", "num_questions": 1},
+                )
+
+        # The request must actually complete (this is the regression being guarded
+        # against -- it used to hang forever with no response).
+        self.assertEqual(res.status_code, 200)
+        events = _parse_sse(res.text)
+        self.assertEqual(events[-1]["stage"], "Error")
+        self.assertIn("boom", events[-1]["error"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -31,6 +31,7 @@ def _parse_sse(text):
 # Mock chatbot before importing api — ChatbotManager is instantiated at module
 # level in api.py and transitively pulls in tools/serpapi/ortools.
 _chatbot_instance = MagicMock()
+_real_chatbot_module = sys.modules.get("chatbot")
 sys.modules["chatbot"] = MagicMock(
     ChatbotManager=MagicMock(return_value=_chatbot_instance)
 )
@@ -38,6 +39,15 @@ sys.modules["chatbot"] = MagicMock(
 from fastapi.testclient import TestClient  # noqa: E402
 import api  # noqa: E402  (chatbot already mocked above)
 from api import app  # noqa: E402
+
+# api.py has already bound its own module-level `chatbot = ChatbotManager()` to our
+# mock above; restore (or remove) the sys.modules entry now so this mock doesn't leak
+# into other test modules collected later in the same pytest run that do
+# `from chatbot import ChatbotManager` expecting the real module.
+if _real_chatbot_module is not None:
+    sys.modules["chatbot"] = _real_chatbot_module
+else:
+    del sys.modules["chatbot"]
 
 client = TestClient(app)
 

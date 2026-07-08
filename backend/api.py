@@ -1,5 +1,6 @@
 import asyncio
-import json
+import functools
+import inspect
 import logging
 import os
 import shutil
@@ -30,14 +31,19 @@ from tools import list_session_documents
 from rag.rag_vector_db import (delete_document,
                                add_document_for_session, delete_session_vectorstore,
                                get_persist_dir_for_embedding, SUPPORTED_EXTENSIONS)
+from sse_utils import sse_event, poll_for_cancel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pathlib import Path
 
+_CORS_ORIGINS = os.getenv(
+    "CORS_ORIGINS", "http://127.0.0.1:5500,http://localhost:5173,http://localhost:8081"
+).split(",")
+
 app = FastAPI(title="Chatbot Manager API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5500", "http://localhost:5173", "http://localhost:8081"],
+    allow_origins=_CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,
@@ -45,6 +51,41 @@ app.add_middleware(
 
 chatbot = ChatbotManager()
 form_manager = FormManager()
+
+
+def handle_errors(message: str, id_param: str = None):
+    """Decorator for sync route handlers: runs the handler, and on any exception logs
+    `message` (with the named parameter's value substituted in for %s, if id_param is
+    given) and raises HTTPException(500, detail=str(e)) -- replacing the identical
+    try/except/log/raise block that was previously repeated in 7 route handlers."""
+    def decorator(fn):
+        sig = inspect.signature(fn)
+
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except HTTPException:
+                raise  # an intentional HTTP error response (e.g. a 400/404 validation check) -- don't rewrap as a 500
+            except Exception as e:
+                if id_param:
+                    bound = sig.bind(*args, **kwargs)
+                    bound.apply_defaults()
+                    logger.error(message, bound.arguments[id_param], exc_info=True)
+                else:
+                    logger.error(message, exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+        return wrapper
+    return decorator
+
+
+def resolve_session_embedding(session_id: str):
+    """Looks up a session's embedding_model_id and its persist directory together,
+    since every caller that needs one needs the other. Returns
+    (embedding_model_id, persist_dir)."""
+    embedding_model_id = chatbot.get_session_embedding_model(session_id)
+    persist_dir = get_persist_dir_for_embedding(embedding_model_id)
+    return embedding_model_id, persist_dir
 
 class CreateSessionRequest(BaseModel):
     user_id: str
@@ -86,18 +127,15 @@ class FormSearchRequest(BaseModel):
     contains_name: bool = True
 
 @app.post("/sessions/create")
+@handle_errors("create_session failed")
 def create_session(request: CreateSessionRequest):
     if request.embedding_model and not get_embedding_model_info(request.embedding_model):
         raise HTTPException(status_code=400, detail=f"Unknown embedding_model: {request.embedding_model}")
-    try:
-        session_id = chatbot.create_session(
-            user_id=request.user_id, title=request.title, session_id=request.session_id,
-            model=request.model, embedding_model=request.embedding_model
-        )
-        return {"session_id": session_id}
-    except Exception as e:
-        logger.error("create_session failed", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    session_id = chatbot.create_session(
+        user_id=request.user_id, title=request.title, session_id=request.session_id,
+        model=request.model, embedding_model=request.embedding_model
+    )
+    return {"session_id": session_id}
 
 
 @app.get("/models")
@@ -109,26 +147,19 @@ def list_embedding_models():
     return {"embedding_models": EMBEDDING_MODEL_CATALOG}
 
 @app.delete("/sessions/{session_id}")
+@handle_errors("delete_session failed for %s", id_param="session_id")
 def delete_session(session_id: str):
-    try:
-        embedding_model_id = chatbot.get_session_embedding_model(session_id)  # look up before deleting the row
-        persist_dir = get_persist_dir_for_embedding(embedding_model_id)
-        chatbot.delete_session(session_id=session_id)
-        delete_session_vectorstore(session_id, persist_dir, embedding_model_id)
-        shutil.rmtree(os.path.join(_SESSION_DOCS_DIR, session_id), ignore_errors=True)
-        return {"session_id": session_id}
-    except Exception as e:
-        logger.error("delete_session failed for %s", session_id, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    embedding_model_id, persist_dir = resolve_session_embedding(session_id)  # look up before deleting the row
+    chatbot.delete_session(session_id=session_id)
+    delete_session_vectorstore(session_id, persist_dir, embedding_model_id)
+    shutil.rmtree(os.path.join(_SESSION_DOCS_DIR, session_id), ignore_errors=True)
+    return {"session_id": session_id}
 
 @app.get("/sessions/{user_id}")
+@handle_errors("list_sessions failed for user %s", id_param="user_id")
 def list_sessions(user_id: str):
-    try:
-        sessions = chatbot.list_sessions(user_id=user_id)
-        return {"sessions": sessions}
-    except Exception as e:
-        logger.error("list_sessions failed for user %s", user_id, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    sessions = chatbot.list_sessions(user_id=user_id)
+    return {"sessions": sessions}
 
 @app.get("/sessions/{session_id}/info")
 def get_session_info(session_id: str):
@@ -138,35 +169,26 @@ def get_session_info(session_id: str):
     return info
 
 @app.patch("/sessions/{session_id}/rename")
+@handle_errors("rename_session failed for %s", id_param="session_id")
 def rename_session(session_id: str, request: RenameSessionRequest):
-    try:
-        chatbot.update_session_title(session_id=session_id, new_title=request.title)
-        return {"session_id": session_id, "title": request.title}
-    except Exception as e:
-        logger.error("rename_session failed for %s", session_id, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    chatbot.update_session_title(session_id=session_id, new_title=request.title)
+    return {"session_id": session_id, "title": request.title}
 
 @app.patch("/sessions/{session_id}/model")
+@handle_errors("set_session_model failed for %s", id_param="session_id")
 def set_session_model(session_id: str, request: SetSessionModelRequest):
-    try:
-        chatbot.update_session_model(session_id=session_id, model=request.model)
-        return {"session_id": session_id, "model": request.model}
-    except Exception as e:
-        logger.error("set_session_model failed for %s", session_id, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    chatbot.update_session_model(session_id=session_id, model=request.model)
+    return {"session_id": session_id, "model": request.model}
 
 @app.get("/history/{session_id}")
+@handle_errors("get_history failed for %s", id_param="session_id")
 def get_history(session_id: str):
-    try:
-        messages = chatbot.get_messages(session_id=session_id)
-        result = []
-        for msg in messages:
-            role = "user" if msg.type == "human" else "assistant"
-            result.append(MessageResponse(content=msg.content, role=role))
-        return {"messages": result}
-    except Exception as e:
-        logger.error("get_history failed for %s", session_id, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    messages = chatbot.get_messages(session_id=session_id)
+    result = []
+    for msg in messages:
+        role = "user" if msg.type == "human" else "assistant"
+        result.append(MessageResponse(content=msg.content, role=role))
+    return {"messages": result}
 
 
 @app.post("/chat")
@@ -207,39 +229,35 @@ async def upload_document(request: Request, file: UploadFile = File(...), sessio
     async def event_stream():
         cancel_event = threading.Event()
         try:
-            yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10})}\n\n"
+            yield sse_event({"stage": "Saving document...", "progress": 10})
             with open(file_path, "wb") as f:
                 f.write(content)
 
-            yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30})}\n\n"
+            yield sse_event({"stage": "Generating embeddings...", "progress": 30})
 
             add_task = asyncio.create_task(
                 asyncio.to_thread(add_document_for_session, file_path, session_id, user_id=user_id,
                                   cancel_event=cancel_event, embedding_model_id=embedding_model_id)
             )
 
-            while not add_task.done():
-                await asyncio.sleep(0.5)
-                if await request.is_disconnected():
-                    cancel_event.set()
-                    add_task.cancel()
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                    logger.info("Upload cancelled by client: %s", file.filename)
-                    return
+            if await poll_for_cancel(request, add_task, cancel_event):
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                logger.info("Upload cancelled by client: %s", file.filename)
+                return
 
             chunk_count = add_task.result()
 
             if cancel_event.is_set() or chunk_count == 0:
                 return
 
-            yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'chunks': chunk_count, 'filename': file.filename})}\n\n"
+            yield sse_event({"stage": "Complete", "progress": 100, "chunks": chunk_count, "filename": file.filename})
             logger.info("Uploaded and indexed %s (%d chunks)", file.filename, chunk_count)
         except asyncio.CancelledError:
             return
         except Exception as e:
             logger.error("upload_document failed for %s", file.filename, exc_info=True)
-            yield f"data: {json.dumps({'stage': 'Error', 'error': str(e)})}\n\n"
+            yield sse_event({"stage": "Error", "error": str(e)})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -284,33 +302,29 @@ async def ingest_paths_endpoint(request: Request, body: IngestPathsRequest):
                 session_docs_dir = os.path.join(_SESSION_DOCS_DIR, session_id)
                 os.makedirs(session_docs_dir, exist_ok=True)
                 dest_path = os.path.join(session_docs_dir, fname)
-                yield f"data: {json.dumps({'stage': 'Saving document...', 'progress': 10, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                yield sse_event({"stage": "Saving document...", "progress": 10, "filename": fname, "file_index": idx, "total_files": total})
                 shutil.copy2(src_path, dest_path)
-                yield f"data: {json.dumps({'stage': 'Generating embeddings...', 'progress': 30, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                yield sse_event({"stage": "Generating embeddings...", "progress": 30, "filename": fname, "file_index": idx, "total_files": total})
                 add_task = asyncio.create_task(
                     asyncio.to_thread(add_document_for_session, dest_path, session_id, user_id=user_id,
                                       cancel_event=cancel_event, embedding_model_id=embedding_model_id)
                 )
 
-                while not add_task.done():
-                    await asyncio.sleep(0.5)
-                    if await request.is_disconnected():
-                        cancel_event.set()
-                        add_task.cancel()
-                        logger.info("ingest-paths cancelled by client: %s", fname)
-                        return
+                if await poll_for_cancel(request, add_task, cancel_event):
+                    logger.info("ingest-paths cancelled by client: %s", fname)
+                    return
 
                 chunk_count = add_task.result()
                 if cancel_event.is_set() or chunk_count == 0:
                     return
 
-                yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'chunks': chunk_count, 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                yield sse_event({"stage": "Complete", "progress": 100, "chunks": chunk_count, "filename": fname, "file_index": idx, "total_files": total})
                 logger.info("Ingested from path %s (%d chunks)", fname, chunk_count)
             except asyncio.CancelledError:
                 return
             except Exception as e:
                 logger.error("ingest_paths failed for %s", src_path, exc_info=True)
-                yield f"data: {json.dumps({'stage': 'Error', 'error': str(e), 'filename': fname, 'file_index': idx, 'total_files': total})}\n\n"
+                yield sse_event({"stage": "Error", "error": str(e), "filename": fname, "file_index": idx, "total_files": total})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -335,15 +349,15 @@ async def form_search(req: FormSearchRequest):
             while True:
                 kind, payload = await queue.get()
                 if kind == "counting":
-                    yield f"data: {json.dumps({'stage': 'Counting files...', 'progress': None})}\n\n"
+                    yield sse_event({"stage": "Counting files...", "progress": None})
                 elif kind == "progress":
-                    yield f"data: {json.dumps({'stage': 'Searching...', 'progress': payload})}\n\n"
+                    yield sse_event({"stage": "Searching...", "progress": payload})
                 elif kind == "done":
-                    yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'result': payload})}\n\n"
+                    yield sse_event({"stage": "Complete", "progress": 100, "result": payload})
                     break
                 elif kind == "error":
                     logger.error("form_search failed for keyword '%s': %s", req.keyword, payload)
-                    yield f"data: {json.dumps({'stage': 'Error', 'error': payload})}\n\n"
+                    yield sse_event({"stage": "Error", "error": payload})
                     break
         finally:
             await task
@@ -360,38 +374,29 @@ def download_generated_file(filename: str):
 
 
 @app.delete("/documents/{filename}")
+@handle_errors("delete_document failed for %s", id_param="filename")
 def delete_document_endpoint(filename: str, session_id: str):
     file_path = os.path.join(_SESSION_DOCS_DIR, session_id, filename)
-    embedding_model_id = chatbot.get_session_embedding_model(session_id)
-    persist_dir = get_persist_dir_for_embedding(embedding_model_id)
+    embedding_model_id, persist_dir = resolve_session_embedding(session_id)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
-    try:
-        removed = delete_document(file_path, session_id, persist_dir, embedding_model_id)
-        os.remove(file_path)
-        logger.info("Deleted %s (%d chunks removed from ChromaDB)", filename, removed)
-        return {"filename": filename, "chunks_removed": removed}
-    except Exception as e:
-        logger.error("delete_document failed for %s", filename, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    removed = delete_document(file_path, session_id, persist_dir, embedding_model_id)
+    os.remove(file_path)
+    logger.info("Deleted %s (%d chunks removed from ChromaDB)", filename, removed)
+    return {"filename": filename, "chunks_removed": removed}
 
 
 @app.post("/evaluate")
 async def evaluate_endpoint(request: EvaluateRequest):
     from rag.ragas_evaluator import evaluate_document
     file_path = os.path.join(_SESSION_DOCS_DIR, request.session_id, request.filename)
-    embedding_model_id = chatbot.get_session_embedding_model(request.session_id)
-    persist_dir = get_persist_dir_for_embedding(embedding_model_id)
+    embedding_model_id, persist_dir = resolve_session_embedding(request.session_id)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
 
     async def event_stream():
         try:
-            async def progress_cb(stage: str, pct: int):
-                yield f"data: {json.dumps({'stage': stage, 'progress': pct})}\n\n"
-
             # Generator-based progress doesn't work inside a callback; collect via queue
-            import asyncio
             queue: asyncio.Queue = asyncio.Queue()
 
             async def cb(stage: str, pct: int):
@@ -414,20 +419,20 @@ async def evaluate_endpoint(request: EvaluateRequest):
             while True:
                 msg = await queue.get()
                 if msg.get("done"):
-                    yield f"data: {json.dumps({'stage': 'Complete', 'progress': 100, 'results': msg['results']})}\n\n"
+                    yield sse_event({"stage": "Complete", "progress": 100, "results": msg["results"]})
                     break
-                yield f"data: {json.dumps({'stage': msg['stage'], 'progress': msg['progress']})}\n\n"
+                yield sse_event({"stage": msg["stage"], "progress": msg["progress"]})
 
             await task
         except Exception as e:
             logger.error("evaluate_endpoint failed for %s", request.filename, exc_info=True)
-            yield f"data: {json.dumps({'stage': 'Error', 'error': str(e)})}\n\n"
+            yield sse_event({"stage": "Error", "error": str(e)})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="localhost", port=8001)
+    uvicorn.run(app, host=os.getenv("API_HOST", "localhost"), port=int(os.getenv("API_PORT", "8001")))
     
 

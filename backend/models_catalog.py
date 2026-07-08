@@ -5,13 +5,13 @@ providers return "No endpoints available matching your guardrail
 restrictions and data policy" until that account setting is loosened."""
 
 MODEL_CATALOG = [
-    {"id": "openai/gpt-4o", "label": "GPT-4o", "provider_name": "OpenAI", "type": "frontier", "size_gb": None},
-    {"id": "anthropic/claude-haiku-4.5", "label": "Claude Haiku 4.5", "provider_name": "Anthropic", "type": "frontier", "size_gb": None},
-    {"id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash", "provider_name": "Google", "type": "frontier", "size_gb": None},
+    {"id": "openai/gpt-4o", "label": "GPT-4o", "provider_name": "OpenAI", "type": "frontier", "size_gb": None, "context_length": 128000},
+    {"id": "anthropic/claude-haiku-4.5", "label": "Claude Haiku 4.5", "provider_name": "Anthropic", "type": "frontier", "size_gb": None, "context_length": 200000},
+    {"id": "google/gemini-2.5-flash", "label": "Gemini 2.5 Flash", "provider_name": "Google", "type": "frontier", "size_gb": None, "context_length": 1000000},
 
-    {"id": "minimax/minimax-m2.7", "label": "MiniMax M2.7", "provider_name": "MiniMax", "type": "open_source", "size_gb": None},
-    {"id": "deepseek/deepseek-v4-flash", "label": "DeepSeek V4 Flash", "provider_name": "DeepSeek", "type": "open_source", "size_gb": 170},
-    {"id": "deepseek/deepseek-v4-pro", "label": "DeepSeek V4 Pro", "provider_name": "DeepSeek", "type": "open_source", "size_gb": 960},
+    {"id": "minimax/minimax-m2.7", "label": "MiniMax M2.7", "provider_name": "MiniMax", "type": "open_source", "size_gb": None, "context_length": 1000000},
+    {"id": "deepseek/deepseek-v4-flash", "label": "DeepSeek V4 Flash", "provider_name": "DeepSeek", "type": "open_source", "size_gb": 170, "context_length": 128000},
+    {"id": "deepseek/deepseek-v4-pro", "label": "DeepSeek V4 Pro", "provider_name": "DeepSeek", "type": "open_source", "size_gb": 960, "context_length": 128000},
 ]
 
 DEFAULT_MODEL_ID = "openai/gpt-4o"

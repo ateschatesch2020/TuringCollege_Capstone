@@ -11,6 +11,7 @@ export interface ModelOption {
   provider_name: string;
   type: "frontier" | "open_source";
   size_gb: number | null;
+  context_length: number | null;
 }
 
 export interface EmbeddingModelOption {

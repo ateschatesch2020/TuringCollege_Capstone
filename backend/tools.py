@@ -18,11 +18,21 @@ from rag.rag_vector_db import SUPPORTED_EXTENSIONS
 logger = logging.getLogger(__name__)
 
 _GENERATED_FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_files")
-_API_BASE_URL = "http://localhost:8001"
+_API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8001")
 
 
 def _ensure_generated_dir():
     os.makedirs(_GENERATED_FILES_DIR, exist_ok=True)
+
+
+def _save_generated_file(save_fn, extension: str, tool_name: str) -> str:
+    """Ensures the generated-files dir exists, saves via save_fn(absolute_path), and
+    returns the generated filename. Shared by the three generate_* tools below."""
+    _ensure_generated_dir()
+    filename = f"{uuid.uuid4().hex}.{extension}"
+    save_fn(os.path.join(_GENERATED_FILES_DIR, filename))
+    logger.info("%s: created %s", tool_name, filename)
+    return filename
 
 
 def _file_size_str(path: str) -> str:
@@ -134,11 +144,27 @@ def generate_presentation(title: str, slides_json: str) -> str:
             else:
                 tf.add_paragraph().text = line
 
-    _ensure_generated_dir()
-    filename = f"{uuid.uuid4().hex}.pptx"
-    prs.save(os.path.join(_GENERATED_FILES_DIR, filename))
-    logger.info("generate_presentation: created %s", filename)
+    filename = _save_generated_file(prs.save, "pptx", "generate_presentation")
     return f"Presentation created successfully.\n\n[Download {title}.pptx]({_API_BASE_URL}/files/{filename})"
+
+
+def _classify_markdown_line(line: str) -> tuple:
+    """Classifies a single markdown-like line (blank / heading / bullet / paragraph),
+    shared by generate_word_document and generate_pdf_document. Multi-line constructs
+    (the '|'-delimited table rows each format handles differently) are detected by the
+    callers before falling back to this classifier."""
+    stripped = line.strip()
+    if not stripped:
+        return ("blank",)
+    if stripped.startswith("### "):
+        return ("heading", 3, stripped[4:])
+    if stripped.startswith("## "):
+        return ("heading", 2, stripped[3:])
+    if stripped.startswith("# "):
+        return ("heading", 1, stripped[2:])
+    if stripped.startswith("- ") or stripped.startswith("* "):
+        return ("bullet", stripped[2:])
+    return ("paragraph", stripped)
 
 
 @tool
@@ -180,26 +206,19 @@ def generate_word_document(title: str, content: str) -> str:
                             tbl.rows[r_idx].cells[c_idx].text = text
             continue
 
-        if not stripped:
+        kind = _classify_markdown_line(lines[i])
+        if kind[0] == "blank":
             i += 1
             continue
-
-        if stripped.startswith("### "):
-            doc.add_heading(stripped[4:], level=3)
-        elif stripped.startswith("## "):
-            doc.add_heading(stripped[3:], level=2)
-        elif stripped.startswith("# "):
-            doc.add_heading(stripped[2:], level=1)
-        elif stripped.startswith("- ") or stripped.startswith("* "):
-            doc.add_paragraph(stripped[2:], style="List Bullet")
+        elif kind[0] == "heading":
+            doc.add_heading(kind[2], level=kind[1])
+        elif kind[0] == "bullet":
+            doc.add_paragraph(kind[1], style="List Bullet")
         else:
-            doc.add_paragraph(stripped)
+            doc.add_paragraph(kind[1])
         i += 1
 
-    _ensure_generated_dir()
-    filename = f"{uuid.uuid4().hex}.docx"
-    doc.save(os.path.join(_GENERATED_FILES_DIR, filename))
-    logger.info("generate_word_document: created %s", filename)
+    filename = _save_generated_file(doc.save, "docx", "generate_word_document")
     return f"Word document created successfully.\n\n[Download {title}.docx]({_API_BASE_URL}/files/{filename})"
 
 
@@ -225,31 +244,24 @@ def generate_pdf_document(title: str, content: str) -> str:
     pdf.ln(6)
     pdf.set_font("Helvetica", "", 11)
 
-    for line in content.split("\n"):
-        stripped = line.strip()
-        if not stripped:
-            pdf.ln(3)
-        elif stripped.startswith("### "):
-            pdf.set_font("Helvetica", "B", 12)
-            pdf.multi_cell(0, 7, stripped[4:], new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font("Helvetica", "", 11)
-        elif stripped.startswith("## "):
-            pdf.set_font("Helvetica", "B", 13)
-            pdf.multi_cell(0, 8, stripped[3:], new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font("Helvetica", "", 11)
-        elif stripped.startswith("# "):
-            pdf.set_font("Helvetica", "B", 14)
-            pdf.multi_cell(0, 9, stripped[2:], new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font("Helvetica", "", 11)
-        elif stripped.startswith("- ") or stripped.startswith("* "):
-            pdf.multi_cell(0, 7, f"  - {stripped[2:]}", new_x="LMARGIN", new_y="NEXT")
-        else:
-            pdf.multi_cell(0, 7, stripped, new_x="LMARGIN", new_y="NEXT")
+    _PDF_HEADING_SIZE = {1: 14, 2: 13, 3: 12}
+    _PDF_HEADING_LINE_HEIGHT = {1: 9, 2: 8, 3: 7}
 
-    _ensure_generated_dir()
-    filename = f"{uuid.uuid4().hex}.pdf"
-    pdf.output(os.path.join(_GENERATED_FILES_DIR, filename))
-    logger.info("generate_pdf_document: created %s", filename)
+    for line in content.split("\n"):
+        kind = _classify_markdown_line(line)
+        if kind[0] == "blank":
+            pdf.ln(3)
+        elif kind[0] == "heading":
+            level = kind[1]
+            pdf.set_font("Helvetica", "B", _PDF_HEADING_SIZE[level])
+            pdf.multi_cell(0, _PDF_HEADING_LINE_HEIGHT[level], kind[2], new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 11)
+        elif kind[0] == "bullet":
+            pdf.multi_cell(0, 7, f"  - {kind[1]}", new_x="LMARGIN", new_y="NEXT")
+        else:
+            pdf.multi_cell(0, 7, kind[1], new_x="LMARGIN", new_y="NEXT")
+
+    filename = _save_generated_file(pdf.output, "pdf", "generate_pdf_document")
     return f"PDF document created successfully.\n\n[Download {title}.pdf]({_API_BASE_URL}/files/{filename})"
 
 
@@ -347,6 +359,28 @@ def search_project_files(project_name: str, query: str) -> str:
     return "\n".join(result) + _build_file_select_block(all_abs_paths)
 
 
+def _format_name_matches(found: list, header_prefix: str, limit: int, empty_msg: str) -> str:
+    """Formats a list of matched file paths as '<header_prefix> (N):' plus size-annotated
+    lines, a truncation notice if capped at `limit`, and a file-select block. Shared by
+    find_files_by_name_exact, find_files_by_name_contains, and FormManager.search_with_progress."""
+    if not found:
+        return empty_msg
+    lines = [f"{header_prefix} ({len(found)}):"]
+    lines.extend(f"  {f} ({_file_size_str(f)})" for f in found)
+    if len(found) >= limit:
+        lines.append(f"  ... (truncated at {limit} results)")
+    return "\n".join(lines) + _build_file_select_block(found)
+
+
+def _drain_search(projects_dir: str, filename: str | None, keyword: str | None) -> dict:
+    """Runs search_files_with_progress to completion (ignoring progress events) and
+    returns its final {"exact": [...], "contains": [...]} payload."""
+    for kind, payload in search_files_with_progress(projects_dir, filename, keyword):
+        if kind == "done":
+            return payload
+    return {"exact": [], "contains": []}
+
+
 @tool
 def find_files_by_name_exact(filename: str) -> str:
     """Find files whose name exactly matches the given filename (case-insensitive) across PROJECTS_DIR.
@@ -358,26 +392,11 @@ def find_files_by_name_exact(filename: str) -> str:
     if not projects_dir:
         return "PROJECTS_DIR environment variable is not set."
 
-    found = []
-    for root, dirs, files in os.walk(projects_dir):
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
-        for fname in files + dirs:
-            if fname.lower() == filename.lower():
-                found.append(os.path.join(root, fname))
-                if len(found) >= 20:
-                    break
-        if len(found) >= 20:
-            break
-
-    if not found:
-        return f"No file named '{filename}' found under {projects_dir}."
-
-    result = [f"Exact matches for '{filename}' ({len(found)}):"]
-    for f in found:
-        result.append(f"  {f} ({_file_size_str(f)})")
-    if len(found) >= 20:
-        result.append("  ... (truncated at 20 results)")
-    return "\n".join(result) + _build_file_select_block(found)
+    found = _drain_search(projects_dir, filename=filename, keyword=None)["exact"]
+    return _format_name_matches(
+        found, f"Exact matches for '{filename}'", 20,
+        f"No file named '{filename}' found under {projects_dir}.",
+    )
 
 
 @tool
@@ -391,26 +410,11 @@ def find_files_by_name_contains(keyword: str) -> str:
     if not projects_dir:
         return "PROJECTS_DIR environment variable is not set."
 
-    found = []
-    for root, dirs, files in os.walk(projects_dir):
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
-        for fname in files + dirs:
-            if keyword.lower() in fname.lower():
-                found.append(os.path.join(root, fname))
-                if len(found) >= 30:
-                    break
-        if len(found) >= 30:
-            break
-
-    if not found:
-        return f"No files with '{keyword}' in their name found under {projects_dir}."
-
-    result = [f"Files with '{keyword}' in name ({len(found)}):"]
-    for f in found:
-        result.append(f"  {f} ({_file_size_str(f)})")
-    if len(found) >= 30:
-        result.append("  ... (truncated at 30 results)")
-    return "\n".join(result) + _build_file_select_block(found)
+    found = _drain_search(projects_dir, filename=None, keyword=keyword)["contains"]
+    return _format_name_matches(
+        found, f"Files with '{keyword}' in name", 30,
+        f"No files with '{keyword}' in their name found under {projects_dir}.",
+    )
 
 
 _dir_count_cache: dict[str, tuple[float, int]] = {}

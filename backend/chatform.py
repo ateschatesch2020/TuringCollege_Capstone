@@ -1,6 +1,6 @@
 import os
 
-from tools import search_files_with_progress, _file_size_str, _build_file_select_block
+from tools import search_files_with_progress, _format_name_matches
 
 
 class FormManager:
@@ -25,26 +25,14 @@ class FormManager:
 
             results = []
             if exact:
-                found = payload["exact"]
-                if found:
-                    section = [f"Exact matches for '{keyword}' ({len(found)}):"]
-                    for f in found:
-                        section.append(f"  {f} ({_file_size_str(f)})")
-                    if len(found) >= 20:
-                        section.append("  ... (truncated at 20 results)")
-                    results.append("\n".join(section) + _build_file_select_block(found))
-                else:
-                    results.append(f"No file named '{keyword}' found under {projects_dir}.")
+                results.append(_format_name_matches(
+                    payload["exact"], f"Exact matches for '{keyword}'", 20,
+                    f"No file named '{keyword}' found under {projects_dir}.",
+                ))
             if contains:
-                found = payload["contains"]
-                if found:
-                    section = [f"Files with '{keyword}' in name ({len(found)}):"]
-                    for f in found:
-                        section.append(f"  {f} ({_file_size_str(f)})")
-                    if len(found) >= 30:
-                        section.append("  ... (truncated at 30 results)")
-                    results.append("\n".join(section) + _build_file_select_block(found))
-                else:
-                    results.append(f"No files with '{keyword}' in their name found under {projects_dir}.")
+                results.append(_format_name_matches(
+                    payload["contains"], f"Files with '{keyword}' in name", 30,
+                    f"No files with '{keyword}' in their name found under {projects_dir}.",
+                ))
 
             yield ("done", "\n\n".join(results) if results else "No files found.")

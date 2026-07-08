@@ -114,7 +114,7 @@ def delete_session(session_id: str):
         embedding_model_id = chatbot.get_session_embedding_model(session_id)  # look up before deleting the row
         persist_dir = get_persist_dir_for_embedding(embedding_model_id)
         chatbot.delete_session(session_id=session_id)
-        delete_session_vectorstore(session_id, persist_dir)
+        delete_session_vectorstore(session_id, persist_dir, embedding_model_id)
         shutil.rmtree(os.path.join(_SESSION_DOCS_DIR, session_id), ignore_errors=True)
         return {"session_id": session_id}
     except Exception as e:
@@ -367,7 +367,7 @@ def delete_document_endpoint(filename: str, session_id: str):
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
     try:
-        removed = delete_document(file_path, session_id, persist_dir)
+        removed = delete_document(file_path, session_id, persist_dir, embedding_model_id)
         os.remove(file_path)
         logger.info("Deleted %s (%d chunks removed from ChromaDB)", filename, removed)
         return {"filename": filename, "chunks_removed": removed}

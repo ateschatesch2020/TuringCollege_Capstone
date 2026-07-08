@@ -10,7 +10,7 @@ from langchain_openrouter import ChatOpenRouter
 
 load_dotenv()
 
-from .rag_vector_db import _get_embedding_model, _get_huggingface_embedding_model, _load_document
+from .rag_vector_db import get_embedding_model, _load_document
 from tools import hybrid_retrieve
 
 
@@ -96,7 +96,7 @@ async def evaluate_document(
 ) -> list[dict]:
     answer_llm = _get_llm(answer_model_id)
     judge_llm = _get_llm(judge_model_id)
-    embeddings = _get_huggingface_embedding_model() if embedding_model_id == "huggingface" else _get_embedding_model()
+    embeddings = get_embedding_model(embedding_model_id)
 
     docs = _load_document(file_path)
     doc_content = "\n".join(d.page_content for d in docs)

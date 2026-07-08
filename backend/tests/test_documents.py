@@ -111,7 +111,7 @@ class TestAddDocumentForSession(unittest.TestCase):
         from rag.rag_vector_db import add_document_for_session
         result = add_document_for_session("/docs/test.pdf", "sess-1")
 
-        mock_delete.assert_called_once_with("/docs/test.pdf", "sess-1", ANY)
+        mock_delete.assert_called_once_with("/docs/test.pdf", "sess-1", ANY, None)
         mock_vs.add_documents.assert_called_once()
         self.assertEqual(result, 1)
 

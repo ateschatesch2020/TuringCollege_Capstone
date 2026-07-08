@@ -116,9 +116,10 @@ def _load_document(file_path: str) -> list[Document]:
     return [Document(page_content=text, metadata={"source": file_path})]
 
 
-def delete_document(file_path: str, session_id: str, persist_directory: str) -> int:
+def delete_document(file_path: str, session_id: str, persist_directory: str,
+                     embedding_model_id: str | None = None) -> int:
     """Delete all ChromaDB chunks whose session_id and source metadata match. Returns deleted count."""
-    vectorstore = Chroma(persist_directory=persist_directory, embedding_function=_get_embedding_model())
+    vectorstore = Chroma(persist_directory=persist_directory, embedding_function=get_embedding_model(embedding_model_id))
     results = vectorstore.get(where={"$and": [{"session_id": session_id}, {"source": file_path}]})
     ids = results["ids"]
     if ids:
@@ -150,16 +151,17 @@ def add_document_for_session(file_path: str, session_id: str, user_id: str = Non
     if cancel_event is not None and cancel_event.is_set():
         return 0
 
-    delete_document(file_path, session_id, persist_dir)  # replace any prior ingestion of this same file instead of accumulating duplicates
+    delete_document(file_path, session_id, persist_dir, embedding_model_id)  # replace any prior ingestion of this same file instead of accumulating duplicates
     vectorstore = Chroma(persist_directory=persist_dir, embedding_function=embedding_model)
     vectorstore.add_documents(chunks)
     return len(chunks)
 
 
-def delete_session_vectorstore(session_id: str, persist_directory: str = None) -> None:
+def delete_session_vectorstore(session_id: str, persist_directory: str = None,
+                                embedding_model_id: str | None = None) -> None:
     """Remove all chunks belonging to a session from the given (or default shared) ChromaDB."""
     persist_directory = persist_directory or _SHARED_DIR
-    vectorstore = Chroma(persist_directory=persist_directory, embedding_function=_get_embedding_model())
+    vectorstore = Chroma(persist_directory=persist_directory, embedding_function=get_embedding_model(embedding_model_id))
     results = vectorstore.get(where={"session_id": session_id})
     ids = results["ids"]
     if ids:

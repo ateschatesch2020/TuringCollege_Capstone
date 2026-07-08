@@ -33,7 +33,7 @@ class TestEvaluateDocumentHybridSection(unittest.TestCase):
     @patch("rag.ragas_evaluator.hybrid_retrieve")
     @patch("rag.ragas_evaluator.generate_qa_pairs", new_callable=AsyncMock)
     @patch("rag.ragas_evaluator._load_document")
-    @patch("rag.ragas_evaluator._get_embedding_model")
+    @patch("rag.ragas_evaluator.get_embedding_model")
     @patch("rag.ragas_evaluator.Chroma")
     @patch("rag.ragas_evaluator._get_llm")
     def test_result_includes_independent_hybrid_section(

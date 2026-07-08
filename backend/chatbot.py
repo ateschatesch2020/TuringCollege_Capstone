@@ -5,9 +5,9 @@ import json
 import uuid
 import sqlite3
 import tools
-from agent import AgentGraph, EvaluatorOutput
+from agent import AgentGraph
+from llm_bundle import LLMBundleFactory
 from session_repository import SessionRepository
-from tools import make_document_search_tool, make_hybrid_search_tool, make_list_documents_tool
 from rag.rag_vector_db import get_embedding_model, get_persist_dir_for_embedding
 from models_catalog import DEFAULT_MODEL_ID, EMBEDDING_MODEL_CATALOG, DEFAULT_EMBEDDING_MODEL_ID
 from datetime import date
@@ -31,6 +31,37 @@ os.environ["LANGSMITH_PROJECT"] = os.getenv("LANGSMITH_PROJECT")
 os.environ["LANGSMITH_ENDPOINT"] = os.getenv("LANGSMITH_ENDPOINT")
 os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 
+
+def _build_initial_state(query: str) -> Dict[str, Any]:
+    """Builds the LangGraph initial state shared by chat() and chat_stream() -- the
+    only difference between the two is invoke() vs. stream()."""
+    today = date.today().strftime("%Y-%m-%d")
+    message = f"Today's date: {today}.\n\nQuestion: {query}"
+    return {
+        "messages": [HumanMessage(content=message)],
+        "success_criteria": "",
+        "feedback_on_work": None,
+        "success_criteria_met": False,
+        "user_input_needed": False,
+        "tool_retry_deadline": None,
+    }
+
+
+def _build_config(session_id: str, model_id: str = None) -> Dict[str, Any]:
+    return {"configurable": {"thread_id": session_id, "model_id": model_id or DEFAULT_MODEL_ID}}
+
+
+def _last_answer_content(messages: list) -> str:
+    """Returns the content of the last message that isn't the evaluator's internal
+    feedback commentary (tagged name="evaluator" in agent.py's evaluator node), so
+    chat() returns the assistant's real answer rather than the evaluator's synthetic
+    follow-up message, which is otherwise the actual last message in a completed turn."""
+    for message in reversed(messages):
+        if getattr(message, "name", None) != "evaluator":
+            return message.content
+    return messages[-1].content if messages else ""
+
+
 class ChatbotManager:
     def __init__(self, model_name: str = DEFAULT_MODEL_ID, session_repo: SessionRepository = None):
         """ starts the chatbot
@@ -40,9 +71,7 @@ class ChatbotManager:
         self.db = "test_history.db"
         self.db_file_path = os.path.join(_root, self.db)
         self.connection_string = f"sqlite:///{self.db_file_path}"
-        self._model_bundles: Dict[str, Dict[str, Any]] = {}
         self._rerank_llm = ChatOpenRouter(model=DEFAULT_MODEL_ID)
-        self.tools = tools.Tools.tools[:]
 
         self._embedding_models = {m["id"]: get_embedding_model(m["id"]) for m in EMBEDDING_MODEL_CATALOG}
         self._embedding_persist_dirs = {m["id"]: get_persist_dir_for_embedding(m["id"]) for m in EMBEDDING_MODEL_CATALOG}
@@ -50,11 +79,11 @@ class ChatbotManager:
         self.session_repo = session_repo or SessionRepository(self.db_file_path)
 
         session_docs_dir = os.path.join(_root, "documents", "sessions")
-        self.tools.append(make_document_search_tool(self._resolve_session_embedding))
-        self.tools.append(make_hybrid_search_tool(self._resolve_session_embedding, llm=self._rerank_llm))
-        self.tools.append(make_list_documents_tool(session_docs_dir=session_docs_dir))
+        self.tool_registry = tools.build_tool_registry(self._resolve_session_embedding, self._rerank_llm, session_docs_dir)
+        self.tools = self.tool_registry.tools
 
-        default_bundle = self._get_bundle(self.model_name)
+        self._llm_bundles = LLMBundleFactory(self.tools)
+        default_bundle = self._llm_bundles.get(self.model_name)
         self.model = default_bundle["model"]
         self.worker_llm_with_tools = default_bundle["worker_llm_with_tools"]
         self.evaluator_llm_with_output = default_bundle["evaluator_llm_with_output"]
@@ -65,21 +94,8 @@ class ChatbotManager:
         conn = sqlite3.connect(self.db, check_same_thread=False)
         sql_memory = SqliteSaver(conn)
 
-        self._agent_graph = AgentGraph(self._get_bundle, self.tools, sql_memory)
+        self._agent_graph = AgentGraph(self._llm_bundles.get, self.tools, sql_memory, self.tool_registry.routing_text)
         self.graph = self._agent_graph.graph
-
-    def _get_bundle(self, model_id: str) -> Dict[str, Any]:
-        """Builds (and caches) a {model, worker_llm_with_tools, evaluator_llm_with_output}
-        bundle for the given OpenRouter model id, so each selectable model is only
-        constructed once and reused across sessions/requests."""
-        if model_id not in self._model_bundles:
-            model = ChatOpenRouter(model=model_id)
-            self._model_bundles[model_id] = {
-                "model": model,
-                "worker_llm_with_tools": model.bind_tools(self.tools),
-                "evaluator_llm_with_output": model.with_structured_output(EvaluatorOutput),
-            }
-        return self._model_bundles[model_id]
 
     def _resolve_session_embedding(self, session_id: str):
         """Looks up which embedding model this session was created with and returns the
@@ -165,46 +181,23 @@ class ChatbotManager:
         """ end point method for chatting """
         response = "Sorry, I encountered an error while processing your request."
         try:
-            today = date.today().strftime("%Y-%m-%d")
-            message = f"Today's date: {today}.\n\nQuestion: {query}"
-
-            result = self.graph.invoke(
-                {
-                    "messages": [HumanMessage(content=message)],
-                    "success_criteria": "",
-                    "feedback_on_work": None,
-                    "success_criteria_met": False,
-                    "user_input_needed": False,
-                    "tool_retry_deadline": None,
-                },
-                config={"configurable": {"thread_id": session_id, "model_id": model_id or DEFAULT_MODEL_ID}})
-            response = result["messages"][-1].content
+            result = self.graph.invoke(_build_initial_state(query), config=_build_config(session_id, model_id))
+            response = _last_answer_content(result["messages"])
         except Exception as e:
             logger.error("chat failed for session %s: %s", session_id, str(e), exc_info=True)
             response = f"Sorry, I encountered an error while processing your request: {e}"
         finally:
-            history = self._get_session_history(session_id)
-            history.add_user_message(query)
-            history.add_ai_message(response)
+            self._persist_turn(session_id, query, response)
         return response
 
     def chat_stream(self, session_id: str, query: str, model_id: str = None):
         full_response = "Sorry, I encountered an error while processing your request."
         try:
-            today = date.today().strftime("%Y-%m-%d")
-            message = f"Today's date: {today}.\n\nQuestion: {query}"
             full_response = ""
             file_select_blocks = []
             for msg_chunk, metadata in self.graph.stream(
-                {
-                    "messages": [HumanMessage(content=message)],
-                    "success_criteria": "",
-                    "feedback_on_work": None,
-                    "success_criteria_met": False,
-                    "user_input_needed": False,
-                    "tool_retry_deadline": None,
-                },
-                config={"configurable": {"thread_id": session_id, "model_id": model_id or DEFAULT_MODEL_ID}},
+                _build_initial_state(query),
+                config=_build_config(session_id, model_id),
                 stream_mode="messages"
             ):
                 if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
@@ -226,9 +219,12 @@ class ChatbotManager:
             full_response = f"Sorry, I encountered an error while processing your request: {e}"
             yield full_response
         finally:
-            history = self._get_session_history(session_id)
-            history.add_user_message(query)
-            history.add_ai_message(full_response)
+            self._persist_turn(session_id, query, full_response)
+
+    def _persist_turn(self, session_id: str, query: str, response: str) -> None:
+        history = self._get_session_history(session_id)
+        history.add_user_message(query)
+        history.add_ai_message(response)
 
 
 if __name__ == "__main__":

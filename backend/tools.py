@@ -639,4 +639,71 @@ def make_hybrid_search_tool(resolve_embedding, llm):
 
 class Tools:
     form_tools = [search_project_files, find_files_by_name_exact, find_files_by_name_contains]
-    tools = [web_search, generate_presentation, generate_word_document, generate_pdf_document]
+
+
+class ToolRegistry:
+    """Pairs agent tools with the routing-guidance bullet the worker's system prompt
+    uses to explain when to call them, so the LangGraph tool list and the prompt's
+    TOOL ROUTING section are both derived from one place instead of being maintained
+    independently. register() takes a single tool or a tuple of tools that share one
+    routing bullet (e.g. the three generate_* file tools)."""
+
+    def __init__(self):
+        self._entries: list = []
+
+    def register(self, tool_or_tools, routing: str) -> None:
+        self._entries.append((tool_or_tools if isinstance(tool_or_tools, tuple) else (tool_or_tools,), routing))
+
+    @property
+    def tools(self) -> list:
+        return [t for tool_group, _ in self._entries for t in tool_group]
+
+    @property
+    def routing_text(self) -> str:
+        return "\n\n".join(routing for _, routing in self._entries)
+
+
+def build_tool_registry(resolve_embedding, rerank_llm, session_docs_dir: str) -> ToolRegistry:
+    """Builds the full set of agent tools (RAG search + file generation + web search)
+    together with the routing guidance the worker's system prompt uses to explain when
+    to call each one. Adding a new tool means registering it here -- the LangGraph tool
+    list and the prompt's TOOL ROUTING section are both derived from this one registry,
+    instead of a tool needing to be added to a list AND described in a separate
+    hardcoded prompt block."""
+    registry = ToolRegistry()
+
+    registry.register(
+        make_document_search_tool(resolve_embedding),
+        "• search_documents: Use for ANY question, summary, extraction, or analysis related to uploaded documents.\n"
+        "  - User asks a question → always call search_documents first before answering.\n"
+        "  - User wants a summary, key points, or specific info from a document → search_documents.\n"
+        "  - User wants to create a presentation, report, or document based on uploaded content → search_documents first, then generate the file.\n"
+        "  - NEVER answer document-related questions from memory — only use what search_documents returns.",
+    )
+    registry.register(
+        make_hybrid_search_tool(resolve_embedding, llm=rerank_llm),
+        "• hybrid_search_documents: A more thorough alternative to search_documents — runs semantic and keyword\n"
+        "  search separately, merges the results, and re-ranks them with an LLM before returning the top 5 chunks.\n"
+        "  - Use it when search_documents doesn't return enough relevant information.\n"
+        "  - Use it when the query needs precise keyword matches (exact names, codes, numbers) alongside semantic matching.",
+    )
+    registry.register(
+        make_list_documents_tool(session_docs_dir=session_docs_dir),
+        "• list_uploaded_documents: Use to answer \"how many documents are uploaded\" or \"what are their names\" questions,\n"
+        "  and to look up a document's exact filename before using it as the document_name filter on\n"
+        "  search_documents/hybrid_search_documents.",
+    )
+    registry.register(
+        web_search,
+        "• web_search: Use when the question requires current, real-time, or up-to-date information that cannot be in uploaded documents.\n"
+        "  - News, prices, weather, live schedules, recent events → web_search.\n"
+        "  - Do NOT use web_search for questions that can be answered from uploaded documents.",
+    )
+    registry.register(
+        (generate_presentation, generate_word_document, generate_pdf_document),
+        "• generate_presentation / generate_word_document / generate_pdf_document: Use when the user explicitly asks for a downloadable file.\n"
+        "  - Always include the download link in your response.\n"
+        "  - For lists, tables, or summaries shown inline in chat, use formatted markdown — no file tool needed unless a download is requested.",
+    )
+
+    return registry

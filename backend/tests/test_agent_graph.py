@@ -107,6 +107,50 @@ class TestAgentGraphToolCallPath(unittest.TestCase):
         self.assertTrue(result["success_criteria_met"])
 
 
+class TestWorkerUsesInjectedRoutingText(unittest.TestCase):
+    def test_system_message_includes_tool_routing_text(self):
+        worker_llm = MagicMock()
+        worker_llm.invoke.return_value = AIMessage(content="answer")
+        evaluator_llm = MagicMock()
+        evaluator_llm.invoke.return_value = MagicMock(
+            feedback="ok", success_criteria_met=True, user_input_needed=False,
+        )
+
+        agent_graph = AgentGraph(
+            get_bundle=lambda model_id: _bundle(worker_llm, evaluator_llm),
+            tools=[],
+            checkpointer=MemorySaver(),
+            tool_routing_text="• my_custom_tool: use it for testing routing injection.",
+        )
+        agent_graph.graph.invoke(_initial_state(), config=_config())
+
+        sent_messages = worker_llm.invoke.call_args[0][0]
+        system_message = sent_messages[0]
+        self.assertIn("my_custom_tool", system_message.content)
+
+
+class TestEvaluatorTagsSyntheticMessage(unittest.TestCase):
+    def test_evaluator_message_is_tagged_so_it_can_be_filtered_out(self):
+        evaluator_llm = MagicMock()
+        evaluator_llm.invoke.return_value = MagicMock(
+            feedback="ok", success_criteria_met=True, user_input_needed=False,
+        )
+        agent_graph = AgentGraph(
+            get_bundle=lambda model_id: _bundle(evaluator_llm=evaluator_llm),
+            tools=[],
+            checkpointer=MemorySaver(),
+        )
+
+        state = {
+            "messages": [HumanMessage(content="q"), AIMessage(content="the real answer")],
+            "success_criteria": "",
+            "feedback_on_work": None,
+        }
+        result = agent_graph.evaluator(state, _config())
+
+        self.assertEqual(result["messages"][0]["name"], "evaluator")
+
+
 class TestTimeoutNotice(unittest.TestCase):
     def test_returns_explanation_and_doubles_timeout(self):
         model = MagicMock()

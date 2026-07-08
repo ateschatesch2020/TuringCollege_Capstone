@@ -71,10 +71,15 @@ class AgentGraph:
     get_bundle(model_id) resolves the {model, worker_llm_with_tools,
     evaluator_llm_with_output} bundle for a given OpenRouter model id; tools/
     checkpointer are the LangGraph tool list and checkpointer to compile against.
+    tool_routing_text is the "TOOL ROUTING" section of the worker's system prompt,
+    built by tools.build_tool_registry() from the same registry the tool list itself
+    comes from, so a new tool's routing guidance and its LangGraph wiring can't drift
+    out of sync with each other.
     """
 
-    def __init__(self, get_bundle, tools: list, checkpointer):
+    def __init__(self, get_bundle, tools: list, checkpointer, tool_routing_text: str = ""):
         self._get_bundle = get_bundle
+        self._tool_routing_text = tool_routing_text
 
         graph_builder = StateGraph(State)
         graph_builder.add_edge(START, "worker")
@@ -101,28 +106,7 @@ class AgentGraph:
 
         TOOL ROUTING — choose the right tool for each request:
 
-        • search_documents: Use for ANY question, summary, extraction, or analysis related to uploaded documents.
-          - User asks a question → always call search_documents first before answering.
-          - User wants a summary, key points, or specific info from a document → search_documents.
-          - User wants to create a presentation, report, or document based on uploaded content → search_documents first, then generate the file.
-          - NEVER answer document-related questions from memory — only use what search_documents returns.
-
-        • hybrid_search_documents: A more thorough alternative to search_documents — runs semantic and keyword
-          search separately, merges the results, and re-ranks them with an LLM before returning the top 5 chunks.
-          - Use it when search_documents doesn't return enough relevant information.
-          - Use it when the query needs precise keyword matches (exact names, codes, numbers) alongside semantic matching.
-
-        • list_uploaded_documents: Use to answer "how many documents are uploaded" or "what are their names" questions,
-          and to look up a document's exact filename before using it as the document_name filter on
-          search_documents/hybrid_search_documents.
-
-        • web_search: Use when the question requires current, real-time, or up-to-date information that cannot be in uploaded documents.
-          - News, prices, weather, live schedules, recent events → web_search.
-          - Do NOT use web_search for questions that can be answered from uploaded documents.
-
-        • generate_presentation / generate_word_document / generate_pdf_document: Use when the user explicitly asks for a downloadable file.
-          - Always include the download link in your response.
-          - For lists, tables, or summaries shown inline in chat, use formatted markdown — no file tool needed unless a download is requested.
+        {self._tool_routing_text}
 
         Reply in the user's language.
 
@@ -262,6 +246,7 @@ class AgentGraph:
             "messages": [
                 {
                     "role": "assistant",
+                    "name": "evaluator",
                     "content": f"Evaluator Feedback on this answer: {eval_result.feedback}",
                 }
             ],

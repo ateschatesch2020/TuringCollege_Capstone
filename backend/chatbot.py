@@ -6,6 +6,7 @@ import uuid
 import sqlite3
 import tools
 from agent import AgentGraph, EvaluatorOutput
+from session_repository import SessionRepository
 from tools import make_document_search_tool, make_hybrid_search_tool, make_list_documents_tool
 from rag.rag_vector_db import get_embedding_model, get_persist_dir_for_embedding
 from models_catalog import DEFAULT_MODEL_ID, EMBEDDING_MODEL_CATALOG, DEFAULT_EMBEDDING_MODEL_ID
@@ -31,7 +32,7 @@ os.environ["LANGSMITH_ENDPOINT"] = os.getenv("LANGSMITH_ENDPOINT")
 os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 
 class ChatbotManager:
-    def __init__(self, model_name: str = DEFAULT_MODEL_ID):
+    def __init__(self, model_name: str = DEFAULT_MODEL_ID, session_repo: SessionRepository = None):
         """ starts the chatbot
         """
         _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -46,7 +47,7 @@ class ChatbotManager:
         self._embedding_models = {m["id"]: get_embedding_model(m["id"]) for m in EMBEDDING_MODEL_CATALOG}
         self._embedding_persist_dirs = {m["id"]: get_persist_dir_for_embedding(m["id"]) for m in EMBEDDING_MODEL_CATALOG}
         self.embedding_model = self._embedding_models[DEFAULT_EMBEDDING_MODEL_ID]
-        self._init_session_db()
+        self.session_repo = session_repo or SessionRepository(self.db_file_path)
 
         session_docs_dir = os.path.join(_root, "documents", "sessions")
         self.tools.append(make_document_search_tool(self._resolve_session_embedding))
@@ -106,30 +107,6 @@ class ChatbotManager:
             used = 0
         return {"used": used, "total": CONTEXT_WINDOW, "percent": round(used / CONTEXT_WINDOW * 100, 1)}
 
-    def _init_session_db(self):
-        """creates chat_sessions table in sqlite db"""
-
-        with sqlite3.connect(self.db_file_path) as conn:
-            conn.execute(f'''
-                CREATE TABLE IF NOT EXISTS chat_sessions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id TEXT NOT NULL,
-                    user_id TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    model TEXT NOT NULL DEFAULT '{DEFAULT_MODEL_ID}',
-                    embedding_model TEXT NOT NULL DEFAULT '{DEFAULT_EMBEDDING_MODEL_ID}',
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            try:
-                conn.execute(f"ALTER TABLE chat_sessions ADD COLUMN model TEXT DEFAULT '{DEFAULT_MODEL_ID}'")
-            except sqlite3.OperationalError:
-                pass
-            try:
-                conn.execute(f"ALTER TABLE chat_sessions ADD COLUMN embedding_model TEXT DEFAULT '{DEFAULT_EMBEDDING_MODEL_ID}'")
-            except sqlite3.OperationalError:
-                pass
-
     def _get_session_history(self, session_id: str) -> ChatMessageHistory:
         """ gets the chat history of given session_id from sqlite database"""
         return SQLChatMessageHistory(
@@ -144,12 +121,7 @@ class ChatbotManager:
         model = model or DEFAULT_MODEL_ID
         embedding_model = embedding_model or DEFAULT_EMBEDDING_MODEL_ID
         try:
-            with sqlite3.connect(self.db_file_path) as conn:
-                conn.execute('''
-                    INSERT INTO chat_sessions (session_id, user_id, title, model, embedding_model)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (session_id, user_id, title, model, embedding_model))
-            return session_id
+            return self.session_repo.create(session_id, user_id, title, model, embedding_model)
         except Exception as e:
             logger.error("create_session failed for user %s: %s", user_id, str(e), exc_info=True)
             return f"Sorry, I encountered an error while processing your request: {e}"
@@ -157,70 +129,33 @@ class ChatbotManager:
     def delete_session(self, session_id: str) -> str:
         """Deletes session and its messages atomically."""
         try:
-            with sqlite3.connect(self.db_file_path) as conn:
-                conn.execute(
-                    'DELETE FROM message_store WHERE session_id = ?', (session_id,))
-                conn.execute(
-                    'DELETE FROM chat_sessions WHERE session_id = ?', (session_id,))
+            self.session_repo.delete(session_id)
             return session_id
         except Exception as e:
             logger.error("delete_session failed for %s: %s", session_id, str(e), exc_info=True)
             raise
 
     def list_sessions(self, user_id: str):
-
-        with sqlite3.connect(self.db_file_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute('''
-                SELECT session_id, title, model, embedding_model, created_at FROM chat_sessions
-                WHERE user_id = ?
-                ORDER BY created_at DESC
-            ''', (user_id,))
-            sessions = cursor.fetchall()
-        return [dict(session) for session in sessions]
+        return self.session_repo.list_for_user(user_id)
 
     def get_user_id_for_session(self, session_id: str) -> Optional[str]:
         """Looks up the user_id associated with a session_id from chat_sessions."""
-        with sqlite3.connect(self.db_file_path) as conn:
-            row = conn.execute(
-                'SELECT user_id FROM chat_sessions WHERE session_id = ?', (session_id,)
-            ).fetchone()
-        return row[0] if row else None
+        return self.session_repo.get_user_id(session_id)
 
     def get_session_embedding_model(self, session_id: str) -> Optional[str]:
         """Looks up the immutable embedding_model id chosen for a session at creation time."""
-        with sqlite3.connect(self.db_file_path) as conn:
-            row = conn.execute(
-                'SELECT embedding_model FROM chat_sessions WHERE session_id = ?', (session_id,)
-            ).fetchone()
-        return row[0] if row else None
+        return self.session_repo.get_embedding_model(session_id)
 
     def get_session_info(self, session_id: str) -> Optional[dict]:
         """Single-session lookup for read-only display (title/model/embedding_model), used by
         routes/pages that don't already have the full session list in context (e.g. EvaluatePage)."""
-        with sqlite3.connect(self.db_file_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                'SELECT session_id, title, model, embedding_model, created_at FROM chat_sessions WHERE session_id = ?',
-                (session_id,)
-            ).fetchone()
-        return dict(row) if row else None
+        return self.session_repo.get_info(session_id)
 
     def update_session_title(self, session_id: str, new_title: str):
-        with sqlite3.connect(self.db_file_path) as conn:
-            conn.execute('''
-                UPDATE chat_sessions
-                SET title = ?
-                WHERE session_id = ?
-            ''', (new_title, session_id))
+        self.session_repo.update_title(session_id, new_title)
 
     def update_session_model(self, session_id: str, model: str):
-        with sqlite3.connect(self.db_file_path) as conn:
-            conn.execute('''
-                UPDATE chat_sessions
-                SET model = ?
-                WHERE session_id = ?
-            ''', (model, session_id))
+        self.session_repo.update_model(session_id, model)
 
     def get_messages(self, session_id: str):
         history = self._get_session_history(session_id)

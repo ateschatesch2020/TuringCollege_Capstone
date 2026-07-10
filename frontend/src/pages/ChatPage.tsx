@@ -18,7 +18,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { streamMessage, stop, isStreaming } = useChatStream();
+  const { streamMessage, streamRetry, stop, isStreaming } = useChatStream();
   const { percent, refresh: refreshTokenUsage } = useTokenUsage();
   const sendStartedRef = useRef(false);
 
@@ -80,6 +80,34 @@ export default function ChatPage() {
     }
   };
 
+  const handleRetry = async (turnIndex: number, newText: string) => {
+    if (!currentSessionId) return;
+    sendStartedRef.current = true;
+    setMessages((prev) => [
+      ...prev.slice(0, turnIndex * 2),
+      { role: "user", content: newText },
+      { role: "assistant", content: "" },
+    ]);
+    try {
+      for await (const fullText of streamRetry(currentSessionId, turnIndex, newText, currentSession?.model)) {
+        setMessages((prev) => {
+          const copy = [...prev];
+          copy[copy.length - 1] = { role: "assistant", content: fullText };
+          return copy;
+        });
+      }
+      await refreshTokenUsage(currentSessionId);
+    } catch (err) {
+      const msg = err instanceof Error && err.name === "AbortError" ? "Interrupted." : "An error occurred.";
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: "assistant", content: msg };
+        return copy;
+      });
+      if (!(err instanceof Error && err.name === "AbortError")) console.error(err);
+    }
+  };
+
   return (
     <DocumentsProvider sessionId={currentSessionId}>
       <Sidebar onNewChat={() => setModalOpen(true)} />
@@ -98,6 +126,7 @@ export default function ChatPage() {
           sessionId={currentSessionId}
           messages={messages}
           streamingLastMessage={isStreaming}
+          onRetry={handleRetry}
         />
         <Composer isStreaming={isStreaming} onSend={handleSend} onStop={stop} />
       </div>

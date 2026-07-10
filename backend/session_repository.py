@@ -53,6 +53,21 @@ class SessionRepository:
                 pass  # message_store is created lazily by SQLChatMessageHistory on first message; nothing to delete if the session never had one
             conn.execute('DELETE FROM chat_sessions WHERE session_id = ?', (session_id,))
 
+    def truncate_messages(self, session_id: str, keep_count: int) -> None:
+        """Keeps only the first keep_count message_store rows (ordered by id) for this
+        session, deleting the rest -- used when retrying a past turn to drop the turns that
+        came after it from the displayed history."""
+        with sqlite3.connect(self.db_file_path) as conn:
+            try:
+                conn.execute('''
+                    DELETE FROM message_store
+                    WHERE session_id = ? AND id NOT IN (
+                        SELECT id FROM message_store WHERE session_id = ? ORDER BY id ASC LIMIT ?
+                    )
+                ''', (session_id, session_id, keep_count))
+            except sqlite3.OperationalError:
+                pass  # message_store is created lazily by SQLChatMessageHistory; nothing to truncate if it doesn't exist yet
+
     def list_for_user(self, user_id: str) -> list[dict]:
         with sqlite3.connect(self.db_file_path) as conn:
             conn.row_factory = sqlite3.Row

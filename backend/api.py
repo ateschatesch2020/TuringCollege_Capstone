@@ -99,6 +99,12 @@ class ChatRequest(BaseModel):
     query: str
     model: Optional[str] = None
 
+class ChatRetryRequest(BaseModel):
+    session_id: str
+    turn_index: int
+    query: str
+    model: Optional[str] = None
+
 class MessageResponse(BaseModel):
     content: str
     role: str = "assistant"
@@ -202,7 +208,23 @@ def chat_endpoint(request: ChatRequest):
             yield f"Sorry, I encountered an error while processing your request: {e}"
 
     return StreamingResponse(iterate_responses(), media_type="text/plain")
-    
+
+
+@app.post("/chat/retry")
+def chat_retry_endpoint(request: ChatRetryRequest):
+    def iterate_responses():
+        try:
+            for response in chatbot.retry_stream(
+                session_id=request.session_id, turn_index=request.turn_index,
+                new_query=request.query, model_id=request.model
+            ):
+                yield response
+        except Exception as e:
+            logger.error("Unhandled error in retry stream for session %s: %s", request.session_id, str(e), exc_info=True)
+            yield f"Sorry, I encountered an error while processing your request: {e}"
+
+    return StreamingResponse(iterate_responses(), media_type="text/plain")
+
 
 @app.get("/sessions/{session_id}/token-usage")
 def get_token_usage(session_id: str):

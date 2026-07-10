@@ -91,7 +91,7 @@ class ChatbotManager:
 
         self.checkpointer = MemorySaver()
 
-        conn = sqlite3.connect(self.db, check_same_thread=False)
+        conn = sqlite3.connect(self.db_file_path, check_same_thread=False)
         sql_memory = SqliteSaver(conn)
 
         self._agent_graph = AgentGraph(self._llm_bundles.get, self.tools, sql_memory, self.tool_registry.routing_text)
@@ -194,32 +194,95 @@ class ChatbotManager:
         full_response = "Sorry, I encountered an error while processing your request."
         try:
             full_response = ""
-            file_select_blocks = []
-            for msg_chunk, metadata in self.graph.stream(
-                _build_initial_state(query),
-                config=_build_config(session_id, model_id),
-                stream_mode="messages"
-            ):
-                if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
-                    full_response += msg_chunk.content
-                    yield msg_chunk.content
-                elif isinstance(msg_chunk, AIMessage) and msg_chunk.content and metadata.get("langgraph_node") == "timeout_notice":
-                    full_response += msg_chunk.content
-                    yield msg_chunk.content
-                elif isinstance(msg_chunk, ToolMessage):
-                    for match in re.finditer(r'```file-select\n.*?\n```', msg_chunk.content or "", re.DOTALL):
-                        file_select_blocks.append(match.group(0))
-
-            if file_select_blocks and "```file-select" not in full_response:
-                extra = "\n\n" + "\n\n".join(file_select_blocks)
-                yield extra
-                full_response += extra
+            for chunk in self._stream_graph_events(_build_initial_state(query), _build_config(session_id, model_id)):
+                full_response += chunk
+                yield chunk
         except Exception as e:
             logger.error("chat_stream failed for session %s: %s", session_id, str(e), exc_info=True)
             full_response = f"Sorry, I encountered an error while processing your request: {e}"
             yield full_response
         finally:
             self._persist_turn(session_id, query, full_response)
+
+    def _stream_graph_events(self, graph_input, config: Dict[str, Any]):
+        """Iterates self.graph.stream(graph_input, config, stream_mode="messages") and yields
+        assistant text chunks -- the timeout-notice message, and any ```file-select``` blocks
+        emitted by a tool call that the model didn't itself echo back, appended once at the
+        end. Shared by chat_stream() (graph_input = a fresh turn) and retry_stream()
+        (graph_input = None, resuming a forked checkpoint) so the chunk-to-text extraction
+        logic can't drift between the two entry points."""
+        file_select_blocks = []
+        full_response = ""
+        for msg_chunk, metadata in self.graph.stream(graph_input, config=config, stream_mode="messages"):
+            if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
+                full_response += msg_chunk.content
+                yield msg_chunk.content
+            elif isinstance(msg_chunk, AIMessage) and msg_chunk.content and metadata.get("langgraph_node") == "timeout_notice":
+                full_response += msg_chunk.content
+                yield msg_chunk.content
+            elif isinstance(msg_chunk, ToolMessage):
+                for match in re.finditer(r'```file-select\n.*?\n```', msg_chunk.content or "", re.DOTALL):
+                    file_select_blocks.append(match.group(0))
+
+        if file_select_blocks and "```file-select" not in full_response:
+            yield "\n\n" + "\n\n".join(file_select_blocks)
+
+    def _find_turn_start(self, session_id: str, turn_index: int):
+        """Returns the checkpoint StateSnapshot for the turn_index-th (0-based) user turn --
+        the state right after that turn's HumanMessage was merged in and before the worker
+        processed it, i.e. what a graph.stream(_build_initial_state(...)) call checkpoints
+        right before running "worker".
+
+        LangGraph tags the checkpoint taken when a new invoke()/stream() input arrives with
+        metadata["source"] == "input" -- but that checkpoint is the state as of the *previous*
+        turn's end, one step before the new HumanMessage is actually merged in (its `next` is
+        always ("__start__",)). Since the graph always edges straight from START to "worker"
+        (agent.py), the checkpoint at (that input checkpoint's step + 1) is always exactly the
+        one containing this turn's merged HumanMessage with `next == ("worker",)`, regardless
+        of how many worker/tools/evaluator loop checkpoints follow later in the same turn."""
+        config = {"configurable": {"thread_id": session_id}}
+        history = list(self.graph.get_state_history(config))
+        step_by_number = {snapshot.metadata["step"]: snapshot for snapshot in history}
+        input_steps = sorted(
+            snapshot.metadata["step"] for snapshot in history
+            if snapshot.metadata.get("source") == "input"
+        )
+        if turn_index < 0 or turn_index >= len(input_steps):
+            raise ValueError(f"No turn {turn_index} in session {session_id} ({len(input_steps)} turns exist)")
+        return step_by_number[input_steps[turn_index] + 1]
+
+    def retry_stream(self, session_id: str, turn_index: int, new_query: str, model_id: str = None):
+        """Edits the turn_index-th user message and regenerates from there by forking the
+        checkpoint history instead of replaying it -- turns after turn_index are simply not
+        part of the new branch, so they're never sent to the model, and nothing in the old
+        branch is deleted.
+
+        Locating/forking the checkpoint happens outside the try/finally below on purpose: if
+        it fails (e.g. this session predates checkpoint-backed history), nothing has been
+        truncated yet, so there's no new "turn" to persist -- persisting one anyway would
+        append a bogus trailing message_store row instead of actually discarding anything,
+        breaking the "editing turn N discards everything after it" invariant."""
+        snapshot = self._find_turn_start(session_id, turn_index)
+        old_human = next(m for m in reversed(snapshot.values["messages"]) if isinstance(m, HumanMessage))
+        today = date.today().strftime("%Y-%m-%d")
+        edited_message = HumanMessage(content=f"Today's date: {today}.\n\nQuestion: {new_query}", id=old_human.id)
+        forked_config = self.graph.update_state(snapshot.config, {"messages": [edited_message]})
+        forked_config["configurable"]["model_id"] = model_id or DEFAULT_MODEL_ID
+
+        self.session_repo.truncate_messages(session_id, keep_count=turn_index * 2)
+
+        full_response = "Sorry, I encountered an error while processing your request."
+        try:
+            full_response = ""
+            for chunk in self._stream_graph_events(None, forked_config):
+                full_response += chunk
+                yield chunk
+        except Exception as e:
+            logger.error("retry_stream failed for session %s turn %s: %s", session_id, turn_index, str(e), exc_info=True)
+            full_response = f"Sorry, I encountered an error while processing your request: {e}"
+            yield full_response
+        finally:
+            self._persist_turn(session_id, new_query, full_response)
 
     def _persist_turn(self, session_id: str, query: str, response: str) -> None:
         history = self._get_session_history(session_id)

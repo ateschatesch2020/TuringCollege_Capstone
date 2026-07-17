@@ -30,7 +30,8 @@ from models_catalog import MODEL_CATALOG, EMBEDDING_MODEL_CATALOG, get_embedding
 from tools import list_session_documents
 from rag.rag_vector_db import (delete_document,
                                add_document_for_session, delete_session_vectorstore,
-                               get_persist_dir_for_embedding, SUPPORTED_EXTENSIONS)
+                               get_persist_dir_for_embedding, get_recursive_persist_dir_for_embedding,
+                               SUPPORTED_EXTENSIONS)
 from sse_utils import sse_event, poll_for_cancel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -115,12 +116,15 @@ class RenameSessionRequest(BaseModel):
 class SetSessionModelRequest(BaseModel):
     model: str
 
+EVALUATION_STRATEGIES = {"semantic", "semantic_hybrid", "recursive", "recursive_hybrid"}
+
 class EvaluateRequest(BaseModel):
     filename: str
     num_questions: int = 20
     session_id: str
     answer_model_id: str = DEFAULT_MODEL_ID
     judge_model_id: str = DEFAULT_MODEL_ID
+    strategies: List[str] = ["semantic", "semantic_hybrid"]
 
 class IngestPathsRequest(BaseModel):
     paths: List[str]
@@ -403,6 +407,8 @@ def delete_document_endpoint(filename: str, session_id: str):
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
     removed = delete_document(file_path, session_id, persist_dir, embedding_model_id)
+    recursive_dir = get_recursive_persist_dir_for_embedding(embedding_model_id)
+    delete_document(file_path, session_id, recursive_dir, embedding_model_id)
     os.remove(file_path)
     logger.info("Deleted %s (%d chunks removed from ChromaDB)", filename, removed)
     return {"filename": filename, "chunks_removed": removed}
@@ -415,6 +421,8 @@ async def evaluate_endpoint(request: EvaluateRequest):
     embedding_model_id, persist_dir = resolve_session_embedding(request.session_id)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Document not found")
+    if not request.strategies or any(s not in EVALUATION_STRATEGIES for s in request.strategies):
+        raise HTTPException(status_code=400, detail=f"strategies must be a non-empty subset of {sorted(EVALUATION_STRATEGIES)}")
 
     async def event_stream():
         try:
@@ -434,6 +442,8 @@ async def evaluate_endpoint(request: EvaluateRequest):
                         judge_model_id=request.judge_model_id,
                         progress_cb=cb,
                         embedding_model_id=embedding_model_id,
+                        strategies=request.strategies,
+                        session_id=request.session_id,
                     )
                     await queue.put({"done": True, "results": results})
                 except Exception as e:

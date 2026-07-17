@@ -49,10 +49,15 @@ export interface EvaluationSideResult extends EvaluationMetrics {
   rag_answer: string;
 }
 
-export interface EvaluationRow extends EvaluationSideResult {
+export interface EvaluationRow {
   question: string;
   expected_answer: string;
-  hybrid?: EvaluationSideResult;
+  results: Record<string, EvaluationSideResult>;
+}
+
+export interface StrategyRow extends EvaluationSideResult {
+  question: string;
+  expected_answer: string;
 }
 
 export interface SSEEvent {

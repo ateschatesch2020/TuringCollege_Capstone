@@ -12,6 +12,7 @@ export function useEvaluation() {
       numQuestions = 20,
       answerModelId: string,
       judgeModelId: string,
+      strategies: string[],
       onEvent?: (evt: SSEEvent) => void
     ) => {
       return sse.run(
@@ -25,6 +26,7 @@ export function useEvaluation() {
             session_id: sessionId,
             answer_model_id: answerModelId,
             judge_model_id: judgeModelId,
+            strategies,
           }),
         },
         onEvent

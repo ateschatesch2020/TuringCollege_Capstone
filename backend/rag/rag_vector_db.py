@@ -5,6 +5,7 @@ from docx import Document as DocxDocument
 from pptx import Presentation
 from langchain_core.documents import Document
 from langchain_experimental.text_splitter import SemanticChunker
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
@@ -15,6 +16,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 _PERSIST_DIR = os.path.join(_ROOT, "chroma_db")
 _SHARED_DIR = os.path.join(_PERSIST_DIR, "shared")
 _HF_DIR = os.path.join(_PERSIST_DIR, "huggingface")
+_RECURSIVE_SHARED_DIR = os.path.join(_PERSIST_DIR, "shared_recursive")
+_RECURSIVE_HF_DIR = os.path.join(_PERSIST_DIR, "huggingface_recursive")
 
 def _get_embedding_model():
     return OpenAIEmbeddings(
@@ -43,6 +46,14 @@ def get_persist_dir_for_embedding(embedding_model_id: str | None) -> str:
     if embedding_model_id == "huggingface":
         return _HF_DIR
     return _SHARED_DIR
+
+
+def get_recursive_persist_dir_for_embedding(embedding_model_id: str | None) -> str:
+    """Mirrors get_persist_dir_for_embedding, but for the RecursiveCharacterTextSplitter-chunked
+    ChromaDB used by the evaluation page's chunking-strategy comparison."""
+    if embedding_model_id == "huggingface":
+        return _RECURSIVE_HF_DIR
+    return _RECURSIVE_SHARED_DIR
 
 
 def _load_pdf(file_path: str) -> str:
@@ -155,6 +166,27 @@ def add_document_for_session(file_path: str, session_id: str, user_id: str = Non
     vectorstore = Chroma(persist_directory=persist_dir, embedding_function=embedding_model)
     vectorstore.add_documents(chunks)
     return len(chunks)
+
+
+def ensure_recursive_chunks(file_path: str, session_id: str, embedding_model_id: str | None = None) -> str:
+    """Idempotently chunk file_path with RecursiveCharacterTextSplitter(chunk_size=1000,
+    chunk_overlap=100) into the recursive-chunking ChromaDB, only if not already present for
+    this (session_id, source) pair. Returns the persist directory."""
+    persist_dir = get_recursive_persist_dir_for_embedding(embedding_model_id)
+    os.makedirs(persist_dir, exist_ok=True)
+    embedding_model = get_embedding_model(embedding_model_id)
+    vectorstore = Chroma(persist_directory=persist_dir, embedding_function=embedding_model)
+
+    existing = vectorstore.get(where={"$and": [{"session_id": session_id}, {"source": file_path}]}, limit=1)
+    if existing["ids"]:
+        return persist_dir
+
+    docs = _load_document(file_path)
+    docs[0].metadata["session_id"] = session_id
+    docs[0].metadata["document_name"] = os.path.basename(file_path)
+    chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100).split_documents(docs)
+    vectorstore.add_documents(chunks)
+    return persist_dir
 
 
 def delete_session_vectorstore(session_id: str, persist_directory: str = None,

@@ -294,7 +294,9 @@ class TestDeleteDocumentEndpoint(unittest.TestCase):
             with patch("api._SESSION_DOCS_DIR", tmpdir):
                 client.delete("/documents/policy.pdf", params={"session_id": "test-session"})
 
-        mock_del.assert_called_once()
+        # Called once for the main (SemanticChunker) store and once for the
+        # RecursiveTextSplitter-chunked store, so no orphaned chunks are left behind.
+        self.assertEqual(mock_del.call_count, 2)
 
     def test_delete_nonexistent_file_returns_404(self):
         with tempfile.TemporaryDirectory() as tmpdir:

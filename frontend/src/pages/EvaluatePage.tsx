@@ -6,7 +6,14 @@ import { useEmbeddingModels } from "../hooks/useEmbeddingModels";
 import { useSessionInfo } from "../hooks/useSessionInfo";
 import ResultsTable from "./ResultsTable.tsx";
 import ModelSelect from "../components/Common/ModelSelect.tsx";
-import type { EvaluationRow } from "../types";
+import type { EvaluationRow, StrategyRow } from "../types";
+
+const STRATEGIES = [
+  { id: "semantic", label: "Semantic Search" },
+  { id: "semantic_hybrid", label: "Semantic + Keyword Search (Hybrid)" },
+  { id: "recursive", label: "RecursiveTextSplitter Search" },
+  { id: "recursive_hybrid", label: "RecursiveTextSplitter + Keyword Search (Hybrid)" },
+] as const;
 
 export default function EvaluatePage() {
   const [params] = useSearchParams();
@@ -16,6 +23,7 @@ export default function EvaluatePage() {
   const [numQuestions, setNumQuestions] = useState(20);
   const [answerModelId, setAnswerModelId] = useState("");
   const [judgeModelId, setJudgeModelId] = useState("");
+  const [selectedStrategies, setSelectedStrategies] = useState<string[]>(["semantic", "semantic_hybrid"]);
   const [results, setResults] = useState<EvaluationRow[] | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { stage, progress, running, error, evaluate } = useEvaluation();
@@ -36,15 +44,23 @@ export default function EvaluatePage() {
     }
   }, [answerModelId, models]);
 
+  const toggleStrategy = (id: string) => {
+    setSelectedStrategies((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  };
+
   const handleRun = async () => {
     if (!filename) {
       alert("No document specified in URL.");
       return;
     }
+    if (selectedStrategies.length === 0) {
+      alert("Select at least one comparison strategy.");
+      return;
+    }
     setResults(null);
     setErrorMsg(null);
     try {
-      await evaluate(filename, sessionId, numQuestions, answerModelId, judgeModelId, (evt) => {
+      await evaluate(filename, sessionId, numQuestions, answerModelId, judgeModelId, selectedStrategies, (evt) => {
         if (evt.stage === "Complete" && Array.isArray(evt.results)) {
           setResults(evt.results as EvaluationRow[]);
         }
@@ -54,13 +70,14 @@ export default function EvaluatePage() {
     }
   };
 
-  const hybridRows: EvaluationRow[] | null =
+  const strategiesInResults = STRATEGIES.filter((s) => results?.some((r) => s.id in r.results));
+
+  const rowsForStrategy = (strategyId: string): StrategyRow[] =>
     results?.map((r) => ({
       question: r.question,
       expected_answer: r.expected_answer,
-      rag_answer: r.hybrid?.rag_answer ?? "",
-      ...r.hybrid,
-    })) ?? null;
+      ...(r.results[strategyId] ?? { rag_answer: "" }),
+    })) ?? [];
 
   return (
     <div className="flex-1 h-full overflow-y-auto bg-gray-50 p-6">
@@ -112,12 +129,29 @@ export default function EvaluatePage() {
             </div>
             <button
               onClick={handleRun}
-              disabled={running}
+              disabled={running || selectedStrategies.length === 0}
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
             >
               <i className={`fa-solid ${running ? "fa-circle-notch fa-spin" : "fa-play"}`}></i>{" "}
               {running ? "Running..." : "Run Evaluation"}
             </button>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Comparisons to run</label>
+            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-600">
+              {STRATEGIES.map((s) => (
+                <label key={s.id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedStrategies.includes(s.id)}
+                    onChange={() => toggleStrategy(s.id)}
+                    className="rounded accent-indigo-600"
+                  />
+                  <span>{s.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -130,10 +164,11 @@ export default function EvaluatePage() {
           </div>
         )}
 
-        {results && hybridRows && (
+        {results && (
           <div>
-            <ResultsTable title="Results" rows={results} />
-            <ResultsTable title="Hybrid Search Results" rows={hybridRows} />
+            {strategiesInResults.map((s) => (
+              <ResultsTable key={s.id} title={s.label} rows={rowsForStrategy(s.id)} />
+            ))}
           </div>
         )}
 

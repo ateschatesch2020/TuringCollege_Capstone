@@ -1,5 +1,5 @@
 import { scoreToColor } from "../lib/scoreColor";
-import type { EvaluationRow } from "../types";
+import type { StrategyRow } from "../types";
 
 const METRICS = ["answer_relevancy", "faithfulness", "context_precision", "context_recall"] as const;
 
@@ -23,7 +23,7 @@ const TIPS: Record<(typeof METRICS)[number], string> = {
 
 interface ResultsTableProps {
   title: string;
-  rows: EvaluationRow[];
+  rows: StrategyRow[];
 }
 
 function HeaderTip({ metric }: { metric: (typeof METRICS)[number] }) {

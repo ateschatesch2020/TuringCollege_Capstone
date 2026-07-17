@@ -10,7 +10,7 @@ from langchain_openrouter import ChatOpenRouter
 
 load_dotenv()
 
-from .rag_vector_db import get_embedding_model, _load_document
+from .rag_vector_db import get_embedding_model, _load_document, ensure_recursive_chunks
 from tools import hybrid_retrieve
 
 
@@ -88,6 +88,33 @@ async def generate_qa_pairs(doc_content: str, n: int, llm: BaseChatModel) -> lis
     return pairs[:n]
 
 
+async def _run_strategy(retrieve_fn, question: str, expected: str, answer_llm: BaseChatModel, judge_llm: BaseChatModel) -> dict:
+    """Retrieve contexts for one (chunking, search) strategy, RAG-answer, and score the
+    4 metrics. `retrieve_fn` is a zero-extra-arg sync callable taking only `question`."""
+    context_docs = await asyncio.to_thread(retrieve_fn, question)
+    contexts = [d.page_content for d in context_docs]
+
+    context_str = "\n\n".join(contexts)
+    rag_prompt = f"Use the following context to answer the question.\n\nContext:\n{context_str}\n\nQuestion: {question}"
+    rag_response = await answer_llm.ainvoke(rag_prompt)
+    rag_answer = rag_response.content
+
+    fa, ar, cp, cr = await asyncio.gather(
+        _score_faithfulness(judge_llm, question, rag_answer, contexts),
+        _score_answer_relevancy(judge_llm, question, rag_answer),
+        _score_context_precision(judge_llm, question, contexts),
+        _score_context_recall(judge_llm, expected, contexts),
+    )
+
+    return {
+        "rag_answer": rag_answer,
+        "faithfulness": round(fa, 3),
+        "answer_relevancy": round(ar, 3),
+        "context_precision": round(cp, 3),
+        "context_recall": round(cr, 3),
+    }
+
+
 async def evaluate_document(
     file_path: str,
     persist_directory: str,
@@ -96,6 +123,8 @@ async def evaluate_document(
     judge_model_id: str,
     progress_cb=None,
     embedding_model_id: str | None = None,
+    strategies: list[str] = ("semantic", "semantic_hybrid"),
+    session_id: str | None = None,
 ) -> list[dict]:
     answer_llm = _get_llm(answer_model_id)
     judge_llm = _get_llm(judge_model_id)
@@ -109,8 +138,27 @@ async def evaluate_document(
 
     qa_pairs = await generate_qa_pairs(doc_content, num_questions, judge_llm)
 
-    vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 5, "filter": {"source": file_path}})
+    # Build a retrieval closure per requested strategy, opening each backing ChromaDB
+    # (and, for the recursive strategies, lazily chunking+ingesting it) only if needed.
+    retrievers = {}
+    if "semantic" in strategies or "semantic_hybrid" in strategies:
+        semantic_vs = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
+        semantic_filter = {"source": file_path}
+        semantic_retriever = semantic_vs.as_retriever(search_kwargs={"k": 5, "filter": semantic_filter})
+        if "semantic" in strategies:
+            retrievers["semantic"] = lambda q: semantic_retriever.invoke(q)
+        if "semantic_hybrid" in strategies:
+            retrievers["semantic_hybrid"] = lambda q: hybrid_retrieve(semantic_vs, q, judge_llm, 5, 10, semantic_filter)
+
+    if "recursive" in strategies or "recursive_hybrid" in strategies:
+        recursive_dir = ensure_recursive_chunks(file_path, session_id, embedding_model_id)
+        recursive_vs = Chroma(persist_directory=recursive_dir, embedding_function=embeddings)
+        recursive_filter = {"source": file_path}
+        recursive_retriever = recursive_vs.as_retriever(search_kwargs={"k": 5, "filter": recursive_filter})
+        if "recursive" in strategies:
+            retrievers["recursive"] = lambda q: recursive_retriever.invoke(q)
+        if "recursive_hybrid" in strategies:
+            retrievers["recursive_hybrid"] = lambda q: hybrid_retrieve(recursive_vs, q, judge_llm, 5, 10, recursive_filter)
 
     results = []
     for i, qa in enumerate(qa_pairs):
@@ -121,50 +169,16 @@ async def evaluate_document(
             pct = 15 + int((i / len(qa_pairs)) * 70)
             await progress_cb(f"Evaluating question {i + 1}/{len(qa_pairs)}...", pct)
 
-        context_docs = await asyncio.to_thread(retriever.invoke, question)
-        contexts = [d.page_content for d in context_docs]
-
-        context_str = "\n\n".join(contexts)
-        rag_prompt = f"Use the following context to answer the question.\n\nContext:\n{context_str}\n\nQuestion: {question}"
-        rag_response = await answer_llm.ainvoke(rag_prompt)
-        rag_answer = rag_response.content
-
-        hybrid_docs = await asyncio.to_thread(
-            hybrid_retrieve, vectorstore, question, judge_llm, 5, 10, {"source": file_path}
-        )
-        hybrid_contexts = [d.page_content for d in hybrid_docs]
-
-        hybrid_context_str = "\n\n".join(hybrid_contexts)
-        hybrid_prompt = f"Use the following context to answer the question.\n\nContext:\n{hybrid_context_str}\n\nQuestion: {question}"
-        hybrid_response = await answer_llm.ainvoke(hybrid_prompt)
-        hybrid_answer = hybrid_response.content
-
-        fa, ar, cp, cr, h_fa, h_ar, h_cp, h_cr = await asyncio.gather(
-            _score_faithfulness(judge_llm, question, rag_answer, contexts),
-            _score_answer_relevancy(judge_llm, question, rag_answer),
-            _score_context_precision(judge_llm, question, contexts),
-            _score_context_recall(judge_llm, expected, contexts),
-            _score_faithfulness(judge_llm, question, hybrid_answer, hybrid_contexts),
-            _score_answer_relevancy(judge_llm, question, hybrid_answer),
-            _score_context_precision(judge_llm, question, hybrid_contexts),
-            _score_context_recall(judge_llm, expected, hybrid_contexts),
-        )
+        strategy_names = list(retrievers.keys())
+        strategy_results = await asyncio.gather(*(
+            _run_strategy(retrievers[name], question, expected, answer_llm, judge_llm)
+            for name in strategy_names
+        ))
 
         results.append({
             "question": question,
             "expected_answer": expected,
-            "rag_answer": rag_answer,
-            "faithfulness": round(fa, 3),
-            "answer_relevancy": round(ar, 3),
-            "context_precision": round(cp, 3),
-            "context_recall": round(cr, 3),
-            "hybrid": {
-                "rag_answer": hybrid_answer,
-                "faithfulness": round(h_fa, 3),
-                "answer_relevancy": round(h_ar, 3),
-                "context_precision": round(h_cp, 3),
-                "context_recall": round(h_cr, 3),
-            },
+            "results": dict(zip(strategy_names, strategy_results)),
         })
 
     return results
